@@ -342,6 +342,25 @@ describe('SqliteLedgerStore', () => {
     expect(() => store.transact((tx) => tx.latest('a'.repeat(64)))).toThrow(LedgerUnavailableError);
     expect(() => store.findAction('ao_x')).toThrow(LedgerUnavailableError);
     expect(() => store.listInDoubt(START_MS)).toThrow(LedgerUnavailableError);
+    expect(() => store.listActions(START_MS)).toThrow(LedgerUnavailableError);
+  });
+
+  test('listActions returns the latest unexpired event of every action in ledger order', () => {
+    const store = open(join(tempDir(), 'ledger.db'));
+    const first = 'ao_000000000000000000000001';
+    const second = 'ao_000000000000000000000002';
+    const expired = 'ao_000000000000000000000003';
+    store.transact((tx) => {
+      tx.append(newEvent({ actionId: first }));
+      tx.append(newEvent({ actionId: second, intentHash: 'b'.repeat(64) }));
+      tx.append(newEvent({ actionId: first, state: 'sent' }));
+      tx.append(newEvent({ actionId: first, state: 'confirmed' }));
+      tx.append(newEvent({ actionId: expired, intentHash: 'c'.repeat(64), expiresAtMs: START_MS + 1 }));
+    });
+    expect(store.listActions(START_MS + 1).map((event) => [event.actionId, event.state])).toEqual([
+      [second, 'intended'],
+      [first, 'confirmed'],
+    ]);
   });
 });
 

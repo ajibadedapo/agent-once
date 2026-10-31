@@ -176,6 +176,7 @@ export class SqliteLedgerStore implements LedgerStore {
   private readonly appendStatement: StatementSync;
   private readonly findActionStatement: StatementSync;
   private readonly inDoubtStatement: StatementSync;
+  private readonly actionsStatement: StatementSync;
   private readonly tx: LedgerTx;
   private active: TransactionState | undefined;
 
@@ -191,6 +192,12 @@ export class SqliteLedgerStore implements LedgerStore {
     this.inDoubtStatement = db.prepare(
       `SELECT * FROM events AS e
        WHERE e.state IN ('intended', 'sent') AND e.expires_at_ms > ?
+         AND NOT EXISTS (SELECT 1 FROM events AS later WHERE later.action_id = e.action_id AND later.seq > e.seq)
+       ORDER BY e.seq`,
+    );
+    this.actionsStatement = db.prepare(
+      `SELECT * FROM events AS e
+       WHERE e.expires_at_ms > ?
          AND NOT EXISTS (SELECT 1 FROM events AS later WHERE later.action_id = e.action_id AND later.seq > e.seq)
        ORDER BY e.seq`,
     );
@@ -263,6 +270,15 @@ export class SqliteLedgerStore implements LedgerStore {
     this.connection();
     try {
       return (this.inDoubtStatement.all(nowMs) as unknown as EventRow[]).map(toEvent);
+    } catch (error) {
+      throw unavailable(error, 'cannot read the ledger');
+    }
+  }
+
+  listActions(nowMs: number): LedgerEvent[] {
+    this.connection();
+    try {
+      return (this.actionsStatement.all(nowMs) as unknown as EventRow[]).map(toEvent);
     } catch (error) {
       throw unavailable(error, 'cannot read the ledger');
     }

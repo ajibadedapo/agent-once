@@ -2,7 +2,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { canonicalize } from '../src/canonical/jcs.js';
 import { LedgerConflictError, LedgerSchemaTooNewError, LedgerUnavailableError } from '../src/ledger/errors.js';
 import { LEDGER_V1_SQL, SqliteLedgerStore, defaultLedgerPath } from '../src/ledger/sqlite-store.js';
@@ -10,7 +10,7 @@ import { loadNodeSqlite } from '../src/ledger/suppress-sqlite-warning.js';
 import { ManualClock } from '../src/time/clock.js';
 import { EXPIRY_MS, START_MS, ledgerContract, newEvent } from './ledger.contract.js';
 
-const { DatabaseSync } = loadNodeSqlite();
+const { DatabaseSync, StatementSync } = loadNodeSqlite();
 
 const tempDirs: string[] = [];
 
@@ -53,13 +53,14 @@ ledgerContract('SqliteLedgerStore', () => {
 describe('SqliteLedgerStore', () => {
   const stores: SqliteLedgerStore[] = [];
 
-  function open(path: string, clock = new ManualClock(START_MS)): SqliteLedgerStore {
-    const store = SqliteLedgerStore.open(path, clock);
+  function open(path: string, clock = new ManualClock(START_MS), options?: { busyTimeoutMs?: number }): SqliteLedgerStore {
+    const store = SqliteLedgerStore.open(path, clock, options);
     stores.push(store);
     return store;
   }
 
   afterEach(() => {
+    vi.restoreAllMocks();
     for (const store of stores.splice(0)) store.close();
     cleanupTempDirs();
   });
@@ -183,7 +184,117 @@ describe('SqliteLedgerStore', () => {
     }
   });
 
-  test('unwritable directory raises LedgerUnavailableError', () => {
+  function holdWriteLock(path: string): { release(): void } {
+    const competitor = new DatabaseSync(path);
+    competitor.exec('BEGIN IMMEDIATE');
+    return {
+      release() {
+        competitor.exec('ROLLBACK');
+        competitor.close();
+      },
+    };
+  }
+
+  test('defaults the busy timeout to 5000 ms and accepts an override', () => {
+    const path = join(tempDir(), 'ledger.db');
+    expect(open(path).settings().busyTimeoutMs).toBe(5000);
+    expect(open(path, new ManualClock(START_MS), { busyTimeoutMs: 0 }).settings().busyTimeoutMs).toBe(0);
+  });
+
+  test('a write lock held past the busy timeout makes transact raise LedgerUnavailableError', () => {
+    const path = join(tempDir(), 'ledger.db');
+    const store = open(path, new ManualClock(START_MS), { busyTimeoutMs: 0 });
+    const lock = holdWriteLock(path);
+    let caught: unknown;
+    try {
+      store.transact((tx) => tx.append(newEvent()));
+    } catch (error) {
+      caught = error;
+    } finally {
+      lock.release();
+    }
+    expect(caught).toBeInstanceOf(LedgerUnavailableError);
+    expect((caught as Error).message).toMatch(/locked|busy/i);
+    expect(store.transact((tx) => tx.append(newEvent())).state).toBe('intended');
+  });
+
+  test('a write lock held past the busy timeout makes open raise LedgerUnavailableError', () => {
+    const path = join(tempDir(), 'ledger.db');
+    open(path).close();
+    const lock = holdWriteLock(path);
+    let caught: unknown;
+    try {
+      open(path, new ManualClock(START_MS), { busyTimeoutMs: 0 });
+    } catch (error) {
+      caught = error;
+    } finally {
+      lock.release();
+    }
+    expect(caught).toBeInstanceOf(LedgerUnavailableError);
+    expect((caught as Error).message).toMatch(/^agent-once ledger unavailable: .*(locked|busy)/i);
+  });
+
+  type Connection = InstanceType<typeof DatabaseSync>;
+
+  function interceptExec(onSql: (db: Connection, sql: string) => void): void {
+    const exec = DatabaseSync.prototype.exec;
+    vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: Connection, sql: string) {
+      onSql(this, sql);
+      return exec.call(this, sql);
+    });
+  }
+
+  test('a storage error that ends the transaction poisons the rest of it', () => {
+    const path = join(tempDir(), 'ledger.db');
+    const store = open(path);
+    let connection: Connection | undefined;
+    interceptExec((db, sql) => {
+      if (sql === 'BEGIN IMMEDIATE') connection = db;
+    });
+    vi.spyOn(StatementSync.prototype, 'run').mockImplementationOnce(() => {
+      connection?.exec('ROLLBACK');
+      throw Object.assign(new Error('disk I/O error'), { code: 'ERR_SQLITE_ERROR', errcode: 10 });
+    });
+    const failures: unknown[] = [];
+    expect(() =>
+      store.transact((tx) => {
+        const steps = [() => tx.append(newEvent()), () => tx.latest('a'.repeat(64)), () => tx.append(newEvent({ intentHash: 'b'.repeat(64) }))];
+        for (const step of steps) {
+          try {
+            step();
+          } catch (error) {
+            failures.push(error);
+          }
+        }
+        return 'swallowed';
+      }),
+    ).toThrow(LedgerUnavailableError);
+    expect(failures).toHaveLength(3);
+    for (const failure of failures) expect(failure).toBeInstanceOf(LedgerUnavailableError);
+    expect((failures[1] as Error).message).toMatch(/transaction was aborted/);
+    vi.restoreAllMocks();
+    expect(rawQuery(path, 'SELECT COUNT(*) AS n FROM events')).toEqual([{ n: 0 }]);
+    expect(store.transact((tx) => tx.append(newEvent())).state).toBe('intended');
+  });
+
+  test('a failing ROLLBACK does not hide the error that caused it', () => {
+    const path = join(tempDir(), 'ledger.db');
+    const store = open(path);
+    interceptExec((_db, sql) => {
+      if (sql === 'ROLLBACK') throw new Error('rollback failed');
+    });
+    expect(() =>
+      store.transact((tx) => {
+        tx.append(newEvent());
+        throw new Error('the original failure');
+      }),
+    ).toThrow('the original failure');
+    vi.restoreAllMocks();
+    expect(() => store.transact((tx) => tx.latest('a'.repeat(64)))).toThrow(LedgerUnavailableError);
+    expect(rawQuery(path, 'SELECT COUNT(*) AS n FROM events')).toEqual([{ n: 0 }]);
+  });
+
+  test.skipIf(process.getuid?.() === 0)('unwritable directory raises LedgerUnavailableError (skipped as root, which ignores directory permissions)', () => {
     const dir = tempDir();
     chmodSync(dir, 0o500);
     expect(() => open(join(dir, 'ledger.db'))).toThrow(LedgerUnavailableError);

@@ -27,3 +27,7 @@ export class LedgerConflictError extends Error {
     this.occurrence = occurrence;
   }
 }
+
+export class LedgerUsageError extends Error {
+  override readonly name: string = 'LedgerUsageError';
+}

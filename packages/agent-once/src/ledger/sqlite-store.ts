@@ -3,10 +3,13 @@ import { dirname, join } from 'node:path';
 import type { DatabaseSync, StatementSync } from 'node:sqlite';
 import { canonicalize, type JsonValue } from '../canonical/jcs.js';
 import type { Clock } from '../time/clock.js';
-import { LedgerConflictError, LedgerSchemaTooNewError, LedgerUnavailableError } from './errors.js';
+import { LedgerConflictError, LedgerSchemaTooNewError, LedgerUnavailableError, LedgerUsageError } from './errors.js';
 import { loadNodeSqlite } from './suppress-sqlite-warning.js';
 import {
   LEDGER_SCHEMA_VERSION,
+  NESTED_TRANSACT,
+  THENABLE_RESULT,
+  isThenable,
   type GuardPolicy,
   type LedgerEvent,
   type LedgerState,
@@ -42,7 +45,7 @@ CREATE INDEX events_by_expiry ON events(expires_at_ms);
 INSERT INTO meta (key, value) VALUES ('schema_version', '1');
 `;
 
-const BUSY_TIMEOUT_MS = 5000;
+const DEFAULT_BUSY_TIMEOUT_MS = 5000;
 const SQLITE_CONSTRAINT_UNIQUE = 2067;
 const POSITIVE_INTEGER = /^[1-9][0-9]*$/;
 const LEDGER_FILE = 'ledger.db';
@@ -65,6 +68,14 @@ interface EventRow {
   policy: GuardPolicy;
   args_json: string | null;
   detail_json: string;
+}
+
+export interface SqliteLedgerOptions {
+  busyTimeoutMs?: number;
+}
+
+interface TransactionState {
+  poisoned: boolean;
 }
 
 export interface SqliteLedgerSettings {
@@ -117,6 +128,10 @@ function pragmaValue(db: DatabaseSync, name: string): unknown {
   return row === undefined ? undefined : Object.values(row)[0];
 }
 
+function abortedTransaction(): LedgerUnavailableError {
+  return new LedgerUnavailableError('the transaction was aborted by a storage error; no further reads or writes are possible in it');
+}
+
 function rollbackIfOpen(db: DatabaseSync): void {
   if (db.isTransaction) db.exec('ROLLBACK');
 }
@@ -162,6 +177,7 @@ export class SqliteLedgerStore implements LedgerStore {
   private readonly findActionStatement: StatementSync;
   private readonly inDoubtStatement: StatementSync;
   private readonly tx: LedgerTx;
+  private active: TransactionState | undefined;
 
   private constructor(db: DatabaseSync) {
     this.db = db;
@@ -184,13 +200,17 @@ export class SqliteLedgerStore implements LedgerStore {
     };
   }
 
-  static open(path: string, clock: Clock): SqliteLedgerStore {
+  static open(path: string, clock: Clock, options: SqliteLedgerOptions = {}): SqliteLedgerStore {
+    const busyTimeoutMs = options.busyTimeoutMs ?? DEFAULT_BUSY_TIMEOUT_MS;
+    if (!Number.isSafeInteger(busyTimeoutMs) || busyTimeoutMs < 0) {
+      throw new RangeError(`busyTimeoutMs must be a non-negative integer, got ${busyTimeoutMs}`);
+    }
     const { DatabaseSync } = loadNodeSqlite();
     let db: DatabaseSync | undefined;
     try {
       mkdirSync(dirname(path), { recursive: true });
       db = new DatabaseSync(path);
-      db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
+      db.exec(`PRAGMA busy_timeout = ${busyTimeoutMs}`);
       initializeSchema(db);
       configureJournal(db);
       db.prepare('DELETE FROM events WHERE expires_at_ms < ?').run(clock.nowMs());
@@ -203,25 +223,30 @@ export class SqliteLedgerStore implements LedgerStore {
 
   transact<T>(fn: (tx: LedgerTx) => T): T {
     const db = this.connection();
+    if (this.active !== undefined) throw new LedgerUsageError(NESTED_TRANSACT);
     try {
       db.exec('BEGIN IMMEDIATE');
     } catch (error) {
       throw unavailable(error, 'cannot begin a transaction');
     }
-    let result: T;
+    const state: TransactionState = { poisoned: false };
+    this.active = state;
     try {
-      result = fn(this.tx);
+      const result = fn(this.tx);
+      if (isThenable(result)) throw new TypeError(THENABLE_RESULT);
+      if (state.poisoned) throw abortedTransaction();
+      try {
+        db.exec('COMMIT');
+      } catch (error) {
+        throw unavailable(error, 'cannot commit');
+      }
+      return result;
     } catch (error) {
-      rollbackIfOpen(db);
+      this.abort(db);
       throw error;
+    } finally {
+      this.active = undefined;
     }
-    try {
-      db.exec('COMMIT');
-    } catch (error) {
-      rollbackIfOpen(db);
-      throw unavailable(error, 'cannot commit');
-    }
-    return result;
   }
 
   findAction(actionId: string): LedgerEvent | undefined {
@@ -263,16 +288,37 @@ export class SqliteLedgerStore implements LedgerStore {
     return this.db;
   }
 
+  private abort(db: DatabaseSync): void {
+    try {
+      rollbackIfOpen(db);
+    } catch {
+      this.close();
+    }
+  }
+
+  private activeConnection(): DatabaseSync {
+    const db = this.connection();
+    if (this.active?.poisoned === true) throw abortedTransaction();
+    return db;
+  }
+
+  private storageFailure(db: DatabaseSync, error: unknown, context: string): LedgerUnavailableError {
+    if (this.active !== undefined && !db.isTransaction) this.active.poisoned = true;
+    return unavailable(error, context);
+  }
+
   private latest(intentHash: string): LedgerEvent | undefined {
+    const db = this.activeConnection();
     try {
       const row = this.latestStatement.get(intentHash) as EventRow | undefined;
       return row === undefined ? undefined : toEvent(row);
     } catch (error) {
-      throw unavailable(error, 'cannot read the ledger');
+      throw this.storageFailure(db, error, 'cannot read the ledger');
     }
   }
 
   private append(event: NewLedgerEvent): LedgerEvent {
+    const db = this.activeConnection();
     const detailJson = canonicalize(event.detail);
     let seq: number;
     try {
@@ -296,7 +342,7 @@ export class SqliteLedgerStore implements LedgerStore {
       seq = Number(lastInsertRowid);
     } catch (error) {
       if (isUniqueViolation(error)) throw new LedgerConflictError(event.intentHash, event.occurrence, { cause: error });
-      throw unavailable(error, 'cannot append to the ledger');
+      throw this.storageFailure(db, error, 'cannot append to the ledger');
     }
     return { ...event, seq, detail: JSON.parse(detailJson) as Record<string, JsonValue> };
   }

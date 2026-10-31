@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'vitest';
-import { LedgerConflictError } from '../src/ledger/errors.js';
+import { LedgerConflictError, LedgerUnavailableError, LedgerUsageError } from '../src/ledger/errors.js';
 import type { LedgerStore, NewLedgerEvent } from '../src/ledger/types.js';
 import { ManualClock } from '../src/time/clock.js';
 
@@ -122,6 +122,41 @@ export function ledgerContract(name: string, makeHarness: () => StoreHarness): v
       ).toThrow('decide failed');
       expect(ledger.transact((tx) => tx.latest('a'.repeat(64)))).toBeUndefined();
       expect(ledger.findAction('ao_000000000000000000000001')).toBeUndefined();
+    });
+
+    test('a nested transact is rejected with LedgerUsageError and the outer transaction rolls back', () => {
+      const ledger = openStore();
+      let nestedError: unknown;
+      expect(() =>
+        ledger.transact((tx) => {
+          tx.append(newEvent());
+          try {
+            ledger.transact((inner) => inner.latest('a'.repeat(64)));
+          } catch (error) {
+            nestedError = error;
+          }
+          throw nestedError;
+        }),
+      ).toThrow(LedgerUsageError);
+      expect(nestedError).toBeInstanceOf(LedgerUsageError);
+      expect(nestedError).not.toBeInstanceOf(LedgerUnavailableError);
+      expect(ledger.findAction('ao_000000000000000000000001')).toBeUndefined();
+      expect(ledger.transact((tx) => tx.append(newEvent())).state).toBe('intended');
+    });
+
+    test.each([
+      ['a promise', () => Promise.resolve('late')],
+      ['a custom thenable', () => ({ then: () => undefined })],
+    ])('a callback returning %s is rejected with a TypeError after rolling back', (_label, makeResult) => {
+      const ledger = openStore();
+      expect(() =>
+        ledger.transact((tx) => {
+          tx.append(newEvent());
+          return makeResult();
+        }),
+      ).toThrow(TypeError);
+      expect(ledger.findAction('ao_000000000000000000000001')).toBeUndefined();
+      expect(ledger.transact((tx) => tx.append(newEvent())).state).toBe('intended');
     });
 
     test('findAction returns the newest event for an action id', () => {

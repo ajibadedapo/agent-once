@@ -1,7 +1,16 @@
 import { canonicalize, type JsonValue } from '../canonical/jcs.js';
 import type { Clock } from '../time/clock.js';
-import { LedgerConflictError, LedgerUnavailableError } from './errors.js';
-import { isInDoubtState, type LedgerEvent, type LedgerStore, type LedgerTx, type NewLedgerEvent } from './types.js';
+import { LedgerConflictError, LedgerUnavailableError, LedgerUsageError } from './errors.js';
+import {
+  NESTED_TRANSACT,
+  THENABLE_RESULT,
+  isInDoubtState,
+  isThenable,
+  type LedgerEvent,
+  type LedgerStore,
+  type LedgerTx,
+  type NewLedgerEvent,
+} from './types.js';
 
 interface StoredEvent {
   fields: Omit<LedgerEvent, 'detail'>;
@@ -16,23 +25,30 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly events: StoredEvent[] = [];
   private nextSeq = 1;
   private closed = false;
+  private inTransaction = false;
 
   constructor(_clock: Clock) {}
 
   transact<T>(fn: (tx: LedgerTx) => T): T {
     this.assertOpen();
+    if (this.inTransaction) throw new LedgerUsageError(NESTED_TRANSACT);
     const rollbackLength = this.events.length;
     const rollbackSeq = this.nextSeq;
     const tx: LedgerTx = {
       latest: (intentHash) => this.latest(intentHash),
       append: (event) => this.append(event),
     };
+    this.inTransaction = true;
     try {
-      return fn(tx);
+      const result = fn(tx);
+      if (isThenable(result)) throw new TypeError(THENABLE_RESULT);
+      return result;
     } catch (error) {
       this.events.length = rollbackLength;
       this.nextSeq = rollbackSeq;
       throw error;
+    } finally {
+      this.inTransaction = false;
     }
   }
 

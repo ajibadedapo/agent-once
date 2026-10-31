@@ -2,20 +2,46 @@
 name = "once-guard"
 version = "0.1.0"
 description = "Stop your AI agent from charging, booking or sending twice."
+readme = "README.md"
 license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [{ name = "Hammed Ajibade" }]
 requires-python = ">=3.10"
 dependencies = []
+keywords = [
+  "idempotency",
+  "exactly-once",
+  "double-charge",
+  "fault-injection",
+  "chaos-engineering",
+  "browser-agent",
+  "computer-use",
+  "mcp",
+  "agent-testing",
+  "ai-agents",
+]
 classifiers = [
+  "Development Status :: 4 - Beta",
+  "Framework :: Pytest",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Software Development :: Testing",
   "Typing :: Typed",
 ]
 
 [project.urls]
 Homepage = "https://github.com/ajibadedapo/agent-once"
 Repository = "https://github.com/ajibadedapo/agent-once"
+Documentation = "https://github.com/ajibadedapo/agent-once/blob/main/docs/python.md"
 Issues = "https://github.com/ajibadedapo/agent-once/issues"
+Changelog = "https://github.com/ajibadedapo/agent-once/blob/main/CHANGELOG.md"
 
 [project.entry-points.pytest11]
 agent_once = "agent_once.pytest_plugin"
@@ -34,6 +60,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agent_once"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/agent_once", "README.md", "LICENSE", "pyproject.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

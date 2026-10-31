@@ -13,3 +13,6 @@ python/build/
 python/dist/
 .agent-once/
 .DS_Store
+packages/agent-once/README.md
+packages/agent-once/LICENSE
+.check-docs-*/

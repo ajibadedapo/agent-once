@@ -71,7 +71,7 @@ Two things in one package, guard first:
 
 ## Delivery
 
-Own public repo under github.com/ajibadedapo (personal open source, never Specvista branding), kept private until Hammed approves the launch. Version 1 is complete when: the MCP proxy, TS and Python cores, Claude Agent SDK and Playwright MCP integrations, the chaos suite with four targets, the GitHub Action, docs and RESULTS.md all exist and pass CI. Other adapters follow in 1.x.
+Own public repo under github.com/ajibadedapo (personal open source, no company branding), kept private until Hammed approves the launch. Version 1 is complete when: the MCP proxy, TS and Python cores, Claude Agent SDK and Playwright MCP integrations, the chaos suite with four targets, the GitHub Action, docs and RESULTS.md all exist and pass CI. Other adapters follow in 1.x.
 
 ## Left to the builder
 

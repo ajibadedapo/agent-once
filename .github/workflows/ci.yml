@@ -56,7 +56,7 @@ jobs:
       - run: npm run build
       - run: npm run typecheck
       - run: npm test --workspace agent-once
-      - run: node --test scripts/spec-vectors.test.mjs scripts/spec-sql.test.mjs scripts/check-action.test.mjs
+      - run: node --test scripts/spec-vectors.test.mjs scripts/spec-sql.test.mjs scripts/check-action.test.mjs scripts/check-docs.test.mjs
 
   python:
     runs-on: ubuntu-24.04

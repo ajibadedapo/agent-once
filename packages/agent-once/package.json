@@ -2,6 +2,20 @@
   "name": "agent-once",
   "version": "0.1.0",
   "description": "Stop your AI agent from charging, booking or sending twice.",
+  "keywords": [
+    "idempotency",
+    "exactly-once",
+    "double-charge",
+    "fault-injection",
+    "chaos-engineering",
+    "browser-agent",
+    "computer-use",
+    "mcp",
+    "agent-testing",
+    "mcp-proxy",
+    "playwright-mcp",
+    "ai-agents"
+  ],
   "license": "Apache-2.0",
   "author": "Hammed Ajibade",
   "repository": {
@@ -54,7 +68,12 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
+    "prepack": "npm run build && node scripts/prepack.mjs",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",

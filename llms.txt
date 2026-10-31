@@ -1,0 +1,30 @@
+# agent-once
+
+> Stop your AI agent from charging, booking or sending twice. agent-once is an MCP proxy and a TypeScript and Python library that gives every side-effecting tool call a stable identity, records it in a local SQLite ledger, and on a repeat returns the recorded result, checks what happened, or stops and asks. Guarantee: at most once by default, exactly once wherever a reconciler can confirm the outcome. It also ships a chaos suite and GitHub Action that measure duplicate and missing effects with and without the guard.
+
+Install: `npx agent-once mcp -- <stdio MCP server command>` (npm package `agent-once`, Node.js 22.13+); Python: `pip install once-guard`, import `agent_once`. Apache 2.0. No telemetry.
+
+## Docs
+
+- [README](https://github.com/ajibadedapo/agent-once/blob/main/README.md): quick start, guarantee, limits and measured results
+- [Getting started](https://github.com/ajibadedapo/agent-once/blob/main/docs/getting-started.md): wrap Playwright MCP and watch a lost checkout response get held
+- [How it works](https://github.com/ajibadedapo/agent-once/blob/main/docs/how-it-works.md): policies, classes, identity, ledger states and the decision table
+- [MCP proxy](https://github.com/ajibadedapo/agent-once/blob/main/docs/mcp-proxy.md): CLI, sessions, the agent_once_resolve tool, elicitation and the approval webhook
+- [Browser agents](https://github.com/ajibadedapo/agent-once/blob/main/docs/browser.md): page-aware rules for @playwright/mcp and chrome-devtools-mcp, markers and read-back
+- [Configuration](https://github.com/ajibadedapo/agent-once/blob/main/docs/configuration.md): every config key with defaults
+- [TypeScript](https://github.com/ajibadedapo/agent-once/blob/main/docs/typescript.md): Guard, guard.wrap, guardedFetch, reconcilers, evidence
+- [Python](https://github.com/ajibadedapo/agent-once/blob/main/docs/python.md): Guard, the guard.tool decorator, pytest fixtures
+- [Claude Agent SDK](https://github.com/ajibadedapo/agent-once/blob/main/docs/claude-agent-sdk.md): guardMcpServers, guardSdkTool, agentOnceElicitationHandler
+- [Chaos suite](https://github.com/ajibadedapo/agent-once/blob/main/docs/chaos.md): targets, faults, scenarios and testing your own agent
+- [CI](https://github.com/ajibadedapo/agent-once/blob/main/docs/ci.md): the GitHub Action and vitest matchers
+
+## Reference
+
+- [Ledger format v1](https://github.com/ajibadedapo/agent-once/blob/main/spec/ledger-v1.md): the normative spec shared by both cores
+- [Benchmark results](https://github.com/ajibadedapo/agent-once/blob/main/RESULTS.md): measured overhead and duplicate rates, including the known limitation
+- [FAQ](https://github.com/ajibadedapo/agent-once/blob/main/docs/faq.md)
+
+## Optional
+
+- [Security policy](https://github.com/ajibadedapo/agent-once/blob/main/SECURITY.md)
+- [Changelog](https://github.com/ajibadedapo/agent-once/blob/main/CHANGELOG.md)

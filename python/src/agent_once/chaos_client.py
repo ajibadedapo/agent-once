@@ -18,6 +18,8 @@ from typing import IO, Any
 from . import __version__
 
 LISTENING_PREFIX = "agent-once chaos targets listening on "
+ADMIN_TOKEN_PREFIX = "agent-once chaos targets admin token "
+ADMIN_TOKEN_HEADER = "x-agent-once-admin-token"
 CLI_ENV = "AGENT_ONCE_CLI"
 DEFAULT_STARTUP_TIMEOUT_S = 120.0
 DEFAULT_STOP_TIMEOUT_S = 10.0
@@ -56,8 +58,9 @@ def duplicate_problems(truth: Mapping[str, Sequence[Effect]]) -> list[str]:
 
 
 class ChaosTargets:
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, admin_token: str) -> None:
         self.url = url.rstrip("/")
+        self._admin_token = admin_token
 
     def _request(self, method: str, path: str, body: object | None = None) -> Any:
         data = None if body is None else json.dumps(body).encode("utf-8")
@@ -65,7 +68,11 @@ class ChaosTargets:
             self.url + path,
             data=data,
             method=method,
-            headers={"content-type": "application/json", "connection": "close"},
+            headers={
+                "content-type": "application/json",
+                "connection": "close",
+                ADMIN_TOKEN_HEADER: self._admin_token,
+            },
         )
         try:
             with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_S) as response:
@@ -159,6 +166,7 @@ class ChaosServer:
         self._group_gone = False
         try:
             self.url = self._await_url(startup_timeout_s)
+            self.admin_token = self._await_admin_token(startup_timeout_s)
         except BaseException:
             self.stop()
             raise
@@ -180,6 +188,23 @@ class ChaosServer:
                 pass
         raise ChaosTargetsError(
             f"agent-once chaos serve did not report a URL (first line {line.strip()!r})"
+            + self._stderr_tail()
+        )
+
+    def _await_admin_token(self, timeout_s: float) -> str:
+        try:
+            line = self._lines.get(timeout=timeout_s)
+        except queue.Empty:
+            line = ""
+        if line.startswith(ADMIN_TOKEN_PREFIX):
+            return line[len(ADMIN_TOKEN_PREFIX) :].strip()
+        if line == "":
+            try:
+                self._process.wait(timeout=self._stop_timeout_s)
+            except subprocess.TimeoutExpired:
+                pass
+        raise ChaosTargetsError(
+            f"agent-once chaos serve did not report an admin token (second line {line.strip()!r})"
             + self._stderr_tail()
         )
 

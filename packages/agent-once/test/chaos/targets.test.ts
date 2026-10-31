@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { TARGET_NAMES } from '../../src/chaos/targets/catalog.js';
+import { ADMIN_TOKEN_HEADER } from '../../src/chaos/targets/server.js';
 import { DEFAULT_BROWSER_CONFIG } from '../../src/config/schema.js';
 import { START_MS, formFields, pageText, postForm, postJson, send, targetsOnManualClock } from './chaos-harness.js';
 
@@ -35,7 +36,7 @@ describe('chaos targets', () => {
     expect(listed.status).toBe(200);
     expect(listed.body).toBe(JSON.stringify(truth.booking));
     expect(listed.body).toContain('"clientRef":"key-booking"');
-    expect(JSON.parse((await send(`${targets.url}/__truth`)).body)).toEqual(truth);
+    expect(JSON.parse((await send(`${targets.url}/__truth`, { headers: { [ADMIN_TOKEN_HEADER]: targets.adminToken } })).body)).toEqual(truth);
   });
 
   test('an invalid request is rejected and commits nothing', async () => {
@@ -122,19 +123,37 @@ describe('chaos targets', () => {
     expect(targets.truth().booking).toEqual([]);
   });
 
-  test('truth, faults and reset are reachable over HTTP', async () => {
+  test('truth, faults and reset are reachable over HTTP with the admin token', async () => {
     const { targets } = await targetsOnManualClock();
+    const admin = { [ADMIN_TOKEN_HEADER]: targets.adminToken };
     await postJson(`${targets.url}/api/email`, BODIES.email);
-    const faults = await postJson(`${targets.url}/__faults`, [{ target: 'email', nth: 1, kind: 'stale_element', holdMs: 0 }]);
+    const faults = await postJson(`${targets.url}/__faults`, [{ target: 'email', nth: 1, kind: 'stale_element', holdMs: 0 }], admin);
     expect(faults.status).toBe(200);
     expect((await postJson(`${targets.url}/api/email`, BODIES.email)).status).toBe(409);
-    const invalid = await postJson(`${targets.url}/__faults`, [{ target: 'email', nth: 0, kind: 'stale_element', holdMs: 0 }]);
+    const invalid = await postJson(`${targets.url}/__faults`, [{ target: 'email', nth: 0, kind: 'stale_element', holdMs: 0 }], admin);
     expect(invalid.status).toBe(400);
-    expect(JSON.parse((await send(`${targets.url}/__truth`)).body).email).toHaveLength(1);
-    expect((await send(`${targets.url}/__reset`, { method: 'POST' })).status).toBe(200);
-    expect(JSON.parse((await send(`${targets.url}/__truth`)).body)).toEqual({ checkout: [], booking: [], email: [], ticket: [] });
+    expect(JSON.parse((await send(`${targets.url}/__truth`, { headers: admin })).body).email).toHaveLength(1);
+    expect((await send(`${targets.url}/__reset`, { method: 'POST', headers: admin })).status).toBe(200);
+    expect(JSON.parse((await send(`${targets.url}/__truth`, { headers: admin })).body)).toEqual({ checkout: [], booking: [], email: [], ticket: [] });
     expect((await postJson(`${targets.url}/api/email`, BODIES.email)).status).toBe(201);
     expect(targets.truth().email.map((effect) => effect.id)).toEqual(['MSG-1']);
     expect(pageText((await send(`${targets.url}/email`)).body)).toContain('Reference F-1');
+  });
+
+  test('admin routes refuse a missing or wrong token and leave the targets unchanged; agent routes need none', async () => {
+    const { targets } = await targetsOnManualClock();
+    const other = await targetsOnManualClock();
+    expect(targets.adminToken).toMatch(/^[0-9a-f]{32}$/);
+    expect(other.targets.adminToken).not.toBe(targets.adminToken);
+    expect((await postJson(`${targets.url}/api/email`, BODIES.email)).status).toBe(201);
+    for (const headers of [{}, { [ADMIN_TOKEN_HEADER]: 'wrong' }, { [ADMIN_TOKEN_HEADER]: other.targets.adminToken }] as Record<string, string>[]) {
+      expect((await send(`${targets.url}/__truth`, { headers })).status).toBe(403);
+      expect((await send(`${targets.url}/__reset`, { method: 'POST', headers })).status).toBe(403);
+      expect((await postJson(`${targets.url}/__faults`, [{ target: 'email', nth: 1, kind: 'stale_element', holdMs: 0 }], headers)).status).toBe(403);
+    }
+    expect(targets.truth().email).toHaveLength(1);
+    expect((await postJson(`${targets.url}/api/email`, BODIES.email)).status).toBe(201);
+    expect((await send(`${targets.url}/api/email`)).status).toBe(200);
+    expect((await send(`${targets.url}/email`)).status).toBe(200);
   });
 });

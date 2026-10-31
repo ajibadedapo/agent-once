@@ -29,7 +29,7 @@ def place_order(item: str, qty: int) -> dict[str, object]:
 place_order("Blue mug", 1)
 ```
 
-A repeat of a call whose outcome is unknown raises `ActionInDoubt` instead of running again. Reconcilers, `guard.run` and `guard.arun` with idempotency keys, and the pytest fixtures (`once_guard`, `once_clock`, `chaos_targets`) are described in the [Python guide](https://github.com/ajibadedapo/agent-once/blob/main/docs/python.md).
+A repeat of a call whose outcome is unknown raises `ActionInDoubt` instead of running again. Reconcilers, `guard.run` and `guard.arun` with idempotency keys, and the pytest fixtures (`once_guard`, `once_clock`, `agent_once_chaos_targets`) are described in the [Python guide](https://github.com/ajibadedapo/agent-once/blob/main/docs/python.md).
 
 The ledger format is shared with the npm package `agent-once`, which provides the MCP proxy for Claude Code, Claude Desktop, Cursor and any other MCP client. Both can use the same ledger file ([format spec](https://github.com/ajibadedapo/agent-once/blob/main/spec/ledger-v1.md)).
 

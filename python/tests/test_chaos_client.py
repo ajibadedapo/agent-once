@@ -29,7 +29,14 @@ child = subprocess.Popen(
 )
 child.stdout.readline()
 print("agent-once chaos targets listening on http://127.0.0.1:9", flush=True)
+print("agent-once chaos targets admin token " + "0f" * 16, flush=True)
 threading.Event().wait()
+"""
+
+SERVER_WITHOUT_A_TOKEN = """
+import sys
+print("agent-once chaos targets listening on http://127.0.0.1:9", flush=True)
+sys.stderr.write("an older agent-once\\n")
 """
 
 SERVER_THAT_FAILS = """
@@ -87,10 +94,20 @@ def test_stop_terminates_the_whole_process_group(tmp_path: Path) -> None:
     server = ChaosServer([sys.executable, str(script), GRANDCHILD, str(lock)])
     try:
         assert server.url == "http://127.0.0.1:9"
+        assert server.admin_token == "0f" * 16
         assert not lock_is_free(lock)
     finally:
         server.stop()
     assert lock_acquired_within(lock, 10.0)
+
+
+def test_a_server_that_reports_no_admin_token_is_refused(tmp_path: Path) -> None:
+    script = tmp_path / "server.py"
+    script.write_text(SERVER_WITHOUT_A_TOKEN)
+    with pytest.raises(
+        ChaosTargetsError, match="did not report an admin token.*an older agent-once"
+    ):
+        ChaosServer([sys.executable, str(script)], stop_timeout_s=0.5)
 
 
 def test_a_server_that_exits_before_listening_reports_its_stderr(tmp_path: Path) -> None:

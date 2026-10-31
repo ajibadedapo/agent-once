@@ -72,7 +72,7 @@ test('a retry after a lost response does not place a second order', async () => 
 }, 30_000);
 ```
 
-- `startChaosTargets({ faults?, clock?, cli? })` returns `{ url, mcpCommand(guard), truth(), close() }`.
+- `startChaosTargets({ faults?, clock?, cli? })` returns `{ url, adminToken, mcpCommand(guard), truth(), close() }`. `adminToken` is the value for the `x-agent-once-admin-token` header if you call the control endpoints over HTTP yourself.
 - `mcpCommand(true)` is the argv of the targets MCP server wrapped by the agent-once proxy with the chaos preset (read-backs for all four targets); `mcpCommand(false)` is the bare server. Start your agent with it.
 - `toHaveNoDuplicateEffects()` fails when a target holds two effects with the same fields; `toHaveExactlyOneEffect(target)` fails unless the target holds exactly one effect.
 
@@ -80,7 +80,7 @@ The test above plays the agent itself: the first `place_order` commits but the t
 
 ## pytest
 
-Installing `once-guard` adds the `once_guard`, `once_clock` and `chaos_targets` fixtures and the `chaos` marker; see [python.md](python.md#pytest).
+Installing `once-guard` adds the `once_guard`, `once_clock` and `agent_once_chaos_targets` fixtures and the `chaos` marker; see [python.md](python.md#pytest).
 
 ## Without the action
 

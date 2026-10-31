@@ -6,7 +6,8 @@ import { afterEach, describe, expect, test } from 'vitest';
 import { startChaosTargets, type ChaosHandle } from '../src/integrations/vitest.js';
 import { UpstreamStdioTransport } from '../src/mcp/upstream.js';
 import { ManualClock } from '../src/time/clock.js';
-import { postJson } from './chaos/chaos-harness.js';
+import { ADMIN_TOKEN_HEADER } from '../src/chaos/targets/server.js';
+import { postJson, send } from './chaos/chaos-harness.js';
 
 const START_MS = 1_761_912_345_678;
 const CLI = [process.execPath, fileURLToPath(new URL('../dist/cli/main.js', import.meta.url))];
@@ -36,6 +37,8 @@ describe('agent-once/vitest', () => {
     expect(() => expect(handle).toHaveNoDuplicateEffects()).toThrow('checkout has 2 effects with the same fields {"item":"Blue mug","qty":"1"}: ORD-1, ORD-2');
     expect(() => expect(handle).toHaveExactlyOneEffect('checkout')).toThrow('expected exactly one checkout effect, found 2: ORD-1, ORD-2');
     expect((await handle.truth()).checkout).toHaveLength(2);
+    expect((await send(`${handle.url}/__truth`)).status).toBe(403);
+    expect(JSON.parse((await send(`${handle.url}/__truth`, { headers: { [ADMIN_TOKEN_HEADER]: handle.adminToken } })).body).checkout).toHaveLength(2);
   });
 
   test('two different effects on one target are not duplicates', async () => {

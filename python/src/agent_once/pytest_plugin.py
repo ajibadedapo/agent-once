@@ -50,7 +50,7 @@ def agent_once_chaos_server() -> Iterator[ChaosServer]:
 
 
 @pytest.fixture
-def chaos_targets(agent_once_chaos_server: ChaosServer) -> ChaosTargets:
-    targets = ChaosTargets(agent_once_chaos_server.url)
+def agent_once_chaos_targets(agent_once_chaos_server: ChaosServer) -> ChaosTargets:
+    targets = ChaosTargets(agent_once_chaos_server.url, agent_once_chaos_server.admin_token)
     targets.reset()
     return targets

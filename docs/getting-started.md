@@ -33,10 +33,11 @@ agent-once ships four small reference sites (checkout, booking, email, ticket) w
 npx agent-once chaos serve --port 4100
 ```
 
-It prints `agent-once chaos targets listening on http://127.0.0.1:4100`. In another terminal, make the first checkout commit the order and then answer with a 504, as a gateway timeout would:
+It prints `agent-once chaos targets listening on http://127.0.0.1:4100`, then `agent-once chaos targets admin token <token>`. The control endpoints need that token. In another terminal, set it and make the first checkout commit the order and then answer with a 504, as a gateway timeout would:
 
 ```bash
-curl -X POST http://127.0.0.1:4100/__faults -H 'content-type: application/json' -d '[{"target":"checkout","nth":1,"kind":"lost_response_after_commit"}]'
+TOKEN=<the admin token>
+curl -X POST http://127.0.0.1:4100/__faults -H "x-agent-once-admin-token: $TOKEN" -H 'content-type: application/json' -d '[{"target":"checkout","nth":1,"kind":"lost_response_after_commit"}]'
 ```
 
 ## 3. Ask the agent to buy something
@@ -53,7 +54,7 @@ What happens:
 Check the truth:
 
 ```bash
-curl http://127.0.0.1:4100/__truth
+curl -H "x-agent-once-admin-token: $TOKEN" http://127.0.0.1:4100/__truth
 ```
 
 There is one order. Without agent-once (`claude mcp add playwright -- npx @playwright/mcp@latest`) there are two.

@@ -1,3 +1,4 @@
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { Clock } from '../../time/clock.js';
@@ -18,6 +19,7 @@ export interface TargetsOptions {
 
 export interface RunningTargets {
   url: string;
+  adminToken: string;
   setFaults(plan: FaultPlan): void;
   truth(): Record<TargetName, Effect[]>;
   reset(): void;
@@ -25,11 +27,27 @@ export interface RunningTargets {
   close(): Promise<void>;
 }
 
+export const ADMIN_TOKEN_HEADER = 'x-agent-once-admin-token';
+const ADMIN_PATHS: ReadonlySet<string> = new Set(['/__truth', '/__reset', '/__faults']);
+const ADMIN_TOKEN_BYTES = 16;
 const DEFAULT_HOST = '127.0.0.1';
 const UI_PATH = /^\/([a-z]+)(?:\/(submit|history))?$/;
 const API_PATH = /^\/api\/([a-z]+)$/;
 
-async function handleAdmin(engine: TargetsEngine, path: string, request: IncomingMessage, response: ServerResponse): Promise<boolean> {
+function holdsAdminToken(request: IncomingMessage, adminToken: string): boolean {
+  const presented = request.headers[ADMIN_TOKEN_HEADER];
+  if (typeof presented !== 'string') return false;
+  const expected = Buffer.from(adminToken, 'utf8');
+  const given = Buffer.from(presented, 'utf8');
+  return given.length === expected.length && timingSafeEqual(given, expected);
+}
+
+async function handleAdmin(engine: TargetsEngine, adminToken: string, path: string, request: IncomingMessage, response: ServerResponse): Promise<boolean> {
+  if (!ADMIN_PATHS.has(path)) return false;
+  if (!holdsAdminToken(request, adminToken)) {
+    sendJson(response, 403, { error: `admin routes need the ${ADMIN_TOKEN_HEADER} header` });
+    return true;
+  }
   if (path === '/__truth' && request.method === 'GET') {
     sendJson(response, 200, engine.truth());
     return true;
@@ -55,9 +73,9 @@ async function handleAdmin(engine: TargetsEngine, path: string, request: Incomin
   return false;
 }
 
-async function route(engine: TargetsEngine, request: IncomingMessage, response: ServerResponse, arrivalMs: number): Promise<void> {
+async function route(engine: TargetsEngine, adminToken: string, request: IncomingMessage, response: ServerResponse, arrivalMs: number): Promise<void> {
   const path = new URL(request.url ?? '/', 'http://targets.invalid').pathname;
-  if (await handleAdmin(engine, path, request, response)) return;
+  if (await handleAdmin(engine, adminToken, path, request, response)) return;
   const api = API_PATH.exec(path);
   if (api !== null && isTargetName(api[1])) {
     await handleApi(engine, api[1], request, response, arrivalMs);
@@ -83,9 +101,10 @@ function fail(response: ServerResponse, error: unknown): void {
 
 export async function startTargets(options: TargetsOptions): Promise<RunningTargets> {
   const engine = new TargetsEngine(options.clock, options.honourIdempotencyKey ?? false);
+  const adminToken = randomBytes(ADMIN_TOKEN_BYTES).toString('hex');
   const server = createServer((request, response) => {
     const arrivalMs = options.clock.nowMs();
-    route(engine, request, response, arrivalMs).catch((error: unknown) => fail(response, error));
+    route(engine, adminToken, request, response, arrivalMs).catch((error: unknown) => fail(response, error));
   });
   const host = options.host ?? DEFAULT_HOST;
   await new Promise<void>((resolve, reject) => {
@@ -99,6 +118,7 @@ export async function startTargets(options: TargetsOptions): Promise<RunningTarg
   let closing: Promise<void> | undefined;
   return {
     url: `http://${host}:${port}`,
+    adminToken,
     setFaults: (plan) => engine.setFaults(plan),
     truth: () => engine.truth(),
     reset: () => engine.reset(),

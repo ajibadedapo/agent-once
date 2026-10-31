@@ -25,9 +25,9 @@ Each form shows a reference (`Reference F-...`) and each target has a history pa
 npx agent-once chaos serve --port 4100
 ```
 
-prints `agent-once chaos targets listening on http://127.0.0.1:4100` and serves them until interrupted. Control endpoints:
+prints `agent-once chaos targets listening on http://127.0.0.1:4100` on its first line and `agent-once chaos targets admin token <token>` on its second, and serves the targets until interrupted. The token is random for each run. The control endpoints below answer 403 unless the request carries it in the `x-agent-once-admin-token` header, so the agent under test cannot read the truth, reset it or change the faults. The agent-facing pages and API need no token.
 
-| Request | Effect |
+| Request (with `x-agent-once-admin-token`) | Effect |
 |---|---|
 | `POST /__faults` with a JSON plan | Sets the faults, for example `[{"target":"checkout","nth":1,"kind":"slow_commit","holdMs":5000}]` (the first checkout submission commits after 5 s and gets no answer) |
 | `GET /__truth` | The effects each target recorded |

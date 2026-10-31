@@ -18,6 +18,7 @@ export interface StartChaosTargetsOptions {
 
 export interface ChaosHandle {
   url: string;
+  adminToken: string;
   mcpCommand(guard: boolean): string[];
   truth(): Promise<Record<TargetName, Effect[]>>;
   close(): Promise<void>;
@@ -42,6 +43,7 @@ export async function startChaosTargets(options: StartChaosTargetsOptions = {}):
   let closing: Promise<void> | undefined;
   const handle: ChaosHandle = {
     url: targets.url,
+    adminToken: targets.adminToken,
     mcpCommand(guard) {
       const bare = targetsMcpCommand(cli, targets.url);
       if (!guard) return bare;

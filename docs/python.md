@@ -112,7 +112,7 @@ Installing `once-guard` registers a pytest plugin with these fixtures:
 |---|---|
 | `once_clock` | A `ManualClock` at `1_761_912_345_678` |
 | `once_guard` | A `Guard` on a fresh SQLite ledger in `tmp_path`, using `once_clock` |
-| `chaos_targets` | The chaos reference targets (a session-wide server, reset before each test), with `url`, `set_faults(plan)`, `truth()`, `assert_no_duplicates()` and `assert_exactly_one(target)` |
+| `agent_once_chaos_targets` | The chaos reference targets (a session-wide server, reset before each test), with `url`, `set_faults(plan)`, `truth()`, `assert_no_duplicates()` and `assert_exactly_one(target)` |
 
 ```python
 def test_a_retry_after_a_lost_response_is_not_repeated(once_guard, once_clock):
@@ -129,7 +129,7 @@ def test_a_retry_after_a_lost_response_is_not_repeated(once_guard, once_clock):
     assert calls == ["Blue mug"]
 ```
 
-`chaos_targets` needs Node.js 22.13 or later: it runs `agent-once chaos serve` through `npx --yes agent-once@<this version>`, or the command in `AGENT_ONCE_CLI` (for example `AGENT_ONCE_CLI="node /path/to/agent-once/dist/cli/main.js"`). Tests that use it can be marked `@pytest.mark.chaos`.
+`agent_once_chaos_targets` needs Node.js 22.13 or later: it runs `agent-once chaos serve` through `npx --yes agent-once@<this version>`, or the command in `AGENT_ONCE_CLI` (for example `AGENT_ONCE_CLI="node /path/to/agent-once/dist/cli/main.js"`). The fixture reads the admin token `chaos serve` prints and sends it on its control requests. Tests that use it can be marked `@pytest.mark.chaos`.
 
 ```python
 import json
@@ -139,13 +139,13 @@ import pytest
 
 
 @pytest.mark.chaos
-def test_one_order(chaos_targets):
+def test_one_order(agent_once_chaos_targets):
     request = urllib.request.Request(
-        chaos_targets.url + "/api/checkout",
+        agent_once_chaos_targets.url + "/api/checkout",
         data=json.dumps({"item": "Blue mug", "qty": "1"}).encode(),
         headers={"content-type": "application/json"},
         method="POST",
     )
     urllib.request.urlopen(request).close()
-    chaos_targets.assert_exactly_one("checkout")
+    agent_once_chaos_targets.assert_exactly_one("checkout")
 ```

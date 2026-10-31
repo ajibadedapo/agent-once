@@ -41,7 +41,7 @@ def test_once_guard_fixture_dedupes_a_decorated_function(pytester: pytest.Pytest
     result.assert_outcomes(passed=2)
 
 
-def test_chaos_targets_fixture_records_a_duplicate_from_an_unguarded_double_call(
+def test_agent_once_chaos_targets_fixture_records_a_duplicate_from_an_unguarded_double_call(
     pytester: pytest.Pytester,
 ) -> None:
     pytester.makepyfile(
@@ -65,25 +65,25 @@ def test_chaos_targets_fixture_records_a_duplicate_from_an_unguarded_double_call
                 return response.status
 
         @pytest.mark.chaos
-        def test_single_call_is_clean(chaos_targets):
-            assert chaos_targets.url.startswith("http://127.0.0.1:")
-            assert place_order(chaos_targets.url) == 201
-            chaos_targets.assert_no_duplicates()
-            chaos_targets.assert_exactly_one("checkout")
+        def test_single_call_is_clean(agent_once_chaos_targets):
+            assert agent_once_chaos_targets.url.startswith("http://127.0.0.1:")
+            assert place_order(agent_once_chaos_targets.url) == 201
+            agent_once_chaos_targets.assert_no_duplicates()
+            agent_once_chaos_targets.assert_exactly_one("checkout")
 
         @pytest.mark.chaos
-        def test_unguarded_double_call(chaos_targets):
-            place_order(chaos_targets.url)
-            place_order(chaos_targets.url)
-            assert [effect["id"] for effect in chaos_targets.truth()["checkout"]] == [
+        def test_unguarded_double_call(agent_once_chaos_targets):
+            place_order(agent_once_chaos_targets.url)
+            place_order(agent_once_chaos_targets.url)
+            assert [effect["id"] for effect in agent_once_chaos_targets.truth()["checkout"]] == [
                 "ORD-1",
                 "ORD-2",
             ]
-            chaos_targets.assert_no_duplicates()
+            agent_once_chaos_targets.assert_no_duplicates()
 
         @pytest.mark.chaos
-        def test_state_is_reset_between_tests(chaos_targets):
-            assert chaos_targets.truth()["checkout"] == []
+        def test_state_is_reset_between_tests(agent_once_chaos_targets):
+            assert agent_once_chaos_targets.truth()["checkout"] == []
 
         def post_ticket(url):
             request = urllib.request.Request(
@@ -100,22 +100,24 @@ def test_chaos_targets_fixture_records_a_duplicate_from_an_unguarded_double_call
                 return error.code
 
         @pytest.mark.chaos
-        def test_faults_apply(chaos_targets):
-            chaos_targets.set_faults(
+        def test_faults_apply(agent_once_chaos_targets):
+            agent_once_chaos_targets.set_faults(
                 [{"target": "ticket", "nth": 1, "kind": "stale_element", "holdMs": 0}]
             )
-            assert post_ticket(chaos_targets.url) == 409
+            assert post_ticket(agent_once_chaos_targets.url) == 409
             with pytest.raises(ValueError, match="unknown target"):
-                chaos_targets.set_faults([{"target": "nowhere", "nth": 1, "kind": "none"}])
+                agent_once_chaos_targets.set_faults(
+                    [{"target": "nowhere", "nth": 1, "kind": "none"}]
+                )
             with pytest.raises(AssertionError, match="exactly one ticket effect, found 0$"):
-                chaos_targets.assert_exactly_one("ticket")
+                agent_once_chaos_targets.assert_exactly_one("ticket")
             with pytest.raises(ValueError, match="unknown target nowhere"):
-                chaos_targets.assert_exactly_one("nowhere")
+                agent_once_chaos_targets.assert_exactly_one("nowhere")
 
         @pytest.mark.chaos
-        def test_reset_clears_faults(chaos_targets):
-            assert post_ticket(chaos_targets.url) == 201
-            chaos_targets.assert_exactly_one("ticket")
+        def test_reset_clears_faults(agent_once_chaos_targets):
+            assert post_ticket(agent_once_chaos_targets.url) == 201
+            agent_once_chaos_targets.assert_exactly_one("ticket")
         """
     )
     result = pytester.runpytest("-p", "no:cacheprovider", "--strict-markers")

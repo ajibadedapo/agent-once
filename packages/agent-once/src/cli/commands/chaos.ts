@@ -60,6 +60,7 @@ async function serve(args: string[], io: CliIo): Promise<number> {
   const port = wholeNumber(values.port, '--port', 0, { min: 0, max: 65_535 });
   const targets = await startTargets({ clock: systemClock, port, honourIdempotencyKey: values['honour-idempotency-key'] === true });
   io.stdout(`agent-once chaos targets listening on ${targets.url}\n`);
+  io.stdout(`agent-once chaos targets admin token ${targets.adminToken}\n`);
   await untilShutdown();
   await targets.close();
   return EXIT_OK;

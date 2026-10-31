@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { chaosTargetsPreset } from '../src/chaos/presets.js';
+import { ADMIN_TOKEN_HEADER } from '../src/chaos/targets/server.js';
 import { afterEach, describe, expect, test } from 'vitest';
 import type { LedgerState, NewLedgerEvent } from '../src/ledger/types.js';
 import { SqliteLedgerStore } from '../src/ledger/sqlite-store.js';
@@ -173,26 +174,28 @@ describe('agent-once mcp', () => {
 });
 
 const LISTENING = /^agent-once chaos targets listening on (http:\/\/127\.0\.0\.1:\d+)$/;
+const ADMIN_TOKEN_LINE = /^agent-once chaos targets admin token ([0-9a-f]{32})$/;
 
-async function serveTargets(): Promise<{ child: ChildProcess; firstLine: string; url: string }> {
+async function serveTargets(): Promise<{ child: ChildProcess; firstLine: string; secondLine: string; url: string; admin: Record<string, string> }> {
   const child = spawn(process.execPath, [CLI, 'chaos', 'serve', '--port', '0'], { stdio: ['ignore', 'pipe', 'pipe'] });
   children.push(child);
-  const firstLine = await new Promise<string>((resolve, reject) => {
+  const [firstLine = '', secondLine = ''] = await new Promise<string[]>((resolve, reject) => {
     let buffered = '';
     child.once('exit', (code) => reject(new Error(`chaos serve exited with ${String(code)} before listening`)));
     child.stdout?.on('data', (chunk: Buffer) => {
       buffered += chunk.toString('utf8');
-      const newline = buffered.indexOf('\n');
-      if (newline !== -1) resolve(buffered.slice(0, newline));
+      const lines = buffered.split('\n');
+      if (lines.length > 2) resolve(lines.slice(0, 2));
     });
   });
   child.removeAllListeners('exit');
   const url = LISTENING.exec(firstLine)?.[1];
-  if (url === undefined) {
+  const token = ADMIN_TOKEN_LINE.exec(secondLine)?.[1];
+  if (url === undefined || token === undefined) {
     child.kill('SIGTERM');
-    throw new Error(`unexpected first line: ${firstLine}`);
+    throw new Error(`unexpected first lines: ${firstLine} / ${secondLine}`);
   }
-  return { child, firstLine, url };
+  return { child, firstLine, secondLine, url, admin: { [ADMIN_TOKEN_HEADER]: token } };
 }
 
 function stopped(child: ChildProcess): Promise<number | null> {
@@ -202,23 +205,26 @@ function stopped(child: ChildProcess): Promise<number | null> {
   });
 }
 
-async function postJson(url: string, body: unknown): Promise<number> {
-  const response = await fetch(url, { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json', connection: 'close' } });
+async function postJson(url: string, body: unknown, headers: Record<string, string> = {}): Promise<number> {
+  const response = await fetch(url, { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json', connection: 'close', ...headers } });
   await response.text();
   return response.status;
 }
 
 describe('agent-once chaos', () => {
-  test('chaos serve prints its URL first and serves truth, faults and reset until stopped', async () => {
-    const { child, firstLine, url } = await serveTargets();
+  test('chaos serve prints its URL first and the admin token second, and serves truth, faults and reset to the token holder until stopped', async () => {
+    const { child, firstLine, secondLine, url, admin } = await serveTargets();
     try {
       expect(firstLine).toMatch(LISTENING);
-      expect(await postJson(`${url}/__faults`, [{ target: 'ticket', nth: 1, kind: 'stale_element', holdMs: 0 }])).toBe(200);
+      expect(secondLine).toMatch(ADMIN_TOKEN_LINE);
+      expect(await postJson(`${url}/__faults`, [{ target: 'ticket', nth: 1, kind: 'stale_element', holdMs: 0 }])).toBe(403);
+      expect(await postJson(`${url}/__faults`, [{ target: 'ticket', nth: 1, kind: 'stale_element', holdMs: 0 }], admin)).toBe(200);
       expect(await postJson(`${url}/api/ticket`, { title: 'Printer jam', body: 'Jammed.' })).toBe(409);
       expect(await postJson(`${url}/api/ticket`, { title: 'Printer jam', body: 'Jammed.' })).toBe(201);
-      const truth = (await (await fetch(`${url}/__truth`, { headers: { connection: 'close' } })).json()) as Record<string, unknown[]>;
+      const truth = (await (await fetch(`${url}/__truth`, { headers: { connection: 'close', ...admin } })).json()) as Record<string, unknown[]>;
       expect(truth.ticket).toHaveLength(1);
-      expect(await postJson(`${url}/__reset`, {})).toBe(200);
+      expect(await postJson(`${url}/__reset`, {})).toBe(403);
+      expect(await postJson(`${url}/__reset`, {}, admin)).toBe(200);
     } finally {
       child.kill('SIGTERM');
     }
@@ -226,7 +232,7 @@ describe('agent-once chaos', () => {
   }, 30_000);
 
   test('the proxy over chaos targets-mcp with the preset replays a lost response instead of ordering twice', async () => {
-    const { child, url } = await serveTargets();
+    const { child, url, admin } = await serveTargets();
     const home = tempDir();
     const configPath = join(home, 'agent-once.json');
     writeFileSync(configPath, JSON.stringify(chaosTargetsPreset()));
@@ -240,7 +246,7 @@ describe('agent-once chaos', () => {
     const client = new Client({ name: 'cli-test', version: '1.0.0' });
     try {
       await client.connect(transport);
-      expect(await postJson(`${url}/__faults`, [{ target: 'checkout', nth: 1, kind: 'lost_response_after_commit', holdMs: 0 }])).toBe(200);
+      expect(await postJson(`${url}/__faults`, [{ target: 'checkout', nth: 1, kind: 'lost_response_after_commit', holdMs: 0 }], admin)).toBe(200);
       const lost = (await client.callTool({ name: 'place_order', arguments: { item: 'Blue mug', qty: 1 } })) as CallToolResult;
       expect(lost.isError).toBe(true);
       const retry = (await client.callTool({ name: 'place_order', arguments: { item: 'Blue mug', qty: 1 } })) as CallToolResult;

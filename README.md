@@ -139,7 +139,7 @@ The chaos suite runs an agent against four reference targets (checkout, booking,
 npx agent-once chaos run --guard both --fail-on-duplicates
 ```
 
-Bring your own agent with `--agent "<command>"`, or run it in GitHub Actions with the bundled action. There are vitest matchers (`agent-once/vitest`) and pytest fixtures (`once_guard`, `chaos_targets`) for your own tests. See [docs/chaos.md](docs/chaos.md) and [docs/ci.md](docs/ci.md).
+Bring your own agent with `--agent "<command>"`, or run it in GitHub Actions with the bundled action. There are vitest matchers (`agent-once/vitest`) and pytest fixtures (`once_guard`, `agent_once_chaos_targets`) for your own tests. See [docs/chaos.md](docs/chaos.md) and [docs/ci.md](docs/ci.md).
 
 ## How it compares
 

@@ -206,16 +206,25 @@ function parseEvidence(reader: Reader, raw: unknown, ctx: ConfigContext): AgentO
   return { jsonl: resolvePath(reader.string(fields.jsonl, '/evidence/jsonl'), ctx.baseDir) };
 }
 
+const IPV4_LOOPBACK = /^127(?:\.\d{1,3}){3}$/;
+
+function isLoopbackHost(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '[::1]' || IPV4_LOOPBACK.test(hostname);
+}
+
 function parseWebhook(reader: Reader, raw: unknown): ApprovalWebhookConfig {
   const fields = reader.object(raw, '/approvalWebhook', ['url', 'timeoutSeconds', 'secretEnv']);
   const url = reader.string(fields.url, '/approvalWebhook/url');
-  let protocol: string;
+  let parsed: URL;
   try {
-    protocol = new URL(url).protocol;
+    parsed = new URL(url);
   } catch {
     reader.fail('/approvalWebhook/url', `expected an http or https URL, got ${describe(url)}`);
   }
-  if (protocol !== 'http:' && protocol !== 'https:') reader.fail('/approvalWebhook/url', `expected an http or https URL, got ${describe(url)}`);
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') reader.fail('/approvalWebhook/url', `expected an http or https URL, got ${describe(url)}`);
+  if (parsed.protocol === 'http:' && !isLoopbackHost(parsed.hostname)) {
+    reader.fail('/approvalWebhook/url', `expected an https URL (plain http is allowed only for a loopback host), got ${describe(url)}`);
+  }
   const webhook: ApprovalWebhookConfig = {
     url,
     timeoutSeconds:

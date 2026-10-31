@@ -83,6 +83,25 @@ describe('browser extension in the proxy', () => {
     expect(chrome.store.appended.at(-1)?.state).toBe('confirmed');
   });
 
+  test('the status attached to an executed click reports the outcome the ledger recorded', async () => {
+    const proxy = await playwright();
+    await snapshot(proxy, 'snapshot');
+    proxy.server.answer('browser_click', fixture('playwright', 'click'));
+    proxy.server.answer('browser_snapshot', fixture('playwright', 'snapshot'));
+    const failed = await placeOrder(proxy, 'snapshot');
+    expect(failed.isError).not.toBe(true);
+    expect(proxy.store.appended.at(-1)?.detail.failure_kind).toBe('error_result');
+    expect(statusOf(failed)).toEqual({ status: 'executed', action_id: proxy.store.appended.at(-1)?.actionId, outcome: 'failed', failure_kind: 'error_result' });
+
+    const other = await playwright();
+    await snapshot(other, 'snapshot');
+    other.server.answer('browser_click', fixture('playwright', 'click'));
+    other.server.answer('browser_snapshot', fixture('playwright', 'done-snapshot'));
+    const confirmed = await placeOrder(other, 'snapshot');
+    expect(other.store.appended.at(-1)?.state).toBe('confirmed');
+    expect(statusOf(confirmed)).toEqual({ status: 'executed', action_id: other.store.appended.at(-1)?.actionId, outcome: 'confirmed' });
+  });
+
   test('a click result that already carries a snapshot is not followed by another', async () => {
     const chrome = await start({ info: serverInfo('chrome-devtools'), tools: chromeDevtoolsTools() });
     chrome.server.answer('take_snapshot', fixture('chrome-devtools', 'snapshot'));

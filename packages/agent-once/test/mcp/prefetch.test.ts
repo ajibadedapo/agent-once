@@ -161,6 +161,19 @@ describe('reserved ids and names', () => {
     expect((await client.next()).id).toBe(7);
   });
 
+  test('an upstream response to an id that was never forwarded, or already answered, is dropped', async () => {
+    const { client, upstream, logs } = await withRawClient();
+    await upstream.send({ id: 41, result: { forged: true } });
+    await client.send({ id: 3, method: 'resources/list', params: {} });
+    const forwarded = await upstream.expectRequest('resources/list');
+    await upstream.reply(forwarded.id, { resources: [] });
+    await upstream.reply(forwarded.id, { resources: [{ uri: 'file:///late', name: 'late' }] });
+    await upstream.notify('notifications/message', { level: 'info', data: 'after' });
+    expect(await client.next()).toMatchObject({ id: 3, result: { resources: [] } });
+    expect(await client.next()).toMatchObject({ method: 'notifications/message' });
+    expect(logs.filter((line) => line.includes('never forwarded'))).toHaveLength(2);
+  });
+
   test('a client request using the reserved id prefix is refused and never reaches the upstream', async () => {
     const { client, upstream } = await withRawClient();
     await client.send({ id: 'agent-once:upstream-1', method: 'resources/list', params: {} });

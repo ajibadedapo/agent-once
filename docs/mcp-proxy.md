@@ -48,7 +48,7 @@ A client that knows the intent exactly can send `_meta["io.github.ajibadedapo/ag
 
 ## What the agent sees
 
-Results the guard decides (executed, replayed, in doubt, blocked, retry by agent) carry `_meta["io.github.ajibadedapo/agent-once"] = { "status": ..., "action_id": ... }` (and `class` on in-doubt and blocked results). Results of tools that pass carry no agent-once metadata. Statuses: `executed`, `replayed`, `in_doubt`, `blocked`, `retry_by_agent`.
+Results the guard decides (executed, replayed, in doubt, blocked, retry by agent) carry `_meta["io.github.ajibadedapo/agent-once"] = { "status": ..., "action_id": ... }` (and `class` on in-doubt and blocked results). Results of tools that pass carry no agent-once metadata. Statuses: `executed`, `replayed`, `in_doubt`, `blocked`, `retry_by_agent`. An `executed` status also carries `outcome`, the outcome written to the ledger: `confirmed`, `failed` (with `failure_kind`: `error_result`, `transport_error` or `not_dispatched`), or `unrecorded` when it could not be written. A browser click whose page shows no success marker is returned as the server sent it, with `outcome: "failed"`.
 
 - **Replayed:** the recorded result, preceded by "agent-once: this action already happened (action ao_...); returning the recorded result instead of repeating it."
 - **In doubt (`guard` policy):** an error result: "agent-once stopped this call: an earlier identical ... call (action ao_...) may already have taken effect and its outcome is unknown. Do not retry it." followed by how to resolve it.
@@ -96,6 +96,8 @@ Pass the same `--config` to `resolve` and `ledger` as to the proxy when the conf
   }
 }
 ```
+
+The URL must be https. Plain http is accepted only for a loopback host (`localhost`, `127.x.x.x` or `[::1]`), because the request carries the tool arguments; any other http URL is a config error at `/approvalWebhook/url`.
 
 agent-once sends one `POST` with `Content-Type: application/json`:
 

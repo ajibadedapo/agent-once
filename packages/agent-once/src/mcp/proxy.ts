@@ -26,6 +26,7 @@ import {
   unidentifiableCallResult,
   upstreamExitedResult,
   withStatus,
+  executedOutcomeDetails,
 } from './result-format.js';
 import { resolveSession } from './session.js';
 import { findToolRule, resolveToolPolicy } from './tool-policy.js';
@@ -469,7 +470,8 @@ class McpProxy implements RunningProxy {
     }
     if (reply.kind === 'error') return reply;
     const forwarded = reply.result as CallToolResult;
-    return { kind: 'result', result: result.actionId === undefined ? forwarded : withStatus(forwarded, 'executed', result.actionId) };
+    if (result.actionId === undefined) return { kind: 'result', result: forwarded };
+    return { kind: 'result', result: withStatus(forwarded, 'executed', result.actionId, executedOutcomeDetails(outcome, result.recorded !== false)) };
   }
 
   private answerGuarded(entry: GuardedRequest, reply: Reply): void {
@@ -523,8 +525,12 @@ class McpProxy implements RunningProxy {
       }
       const key = idKey(message.id);
       const request = this.forwarded.get(key);
+      if (request === undefined) {
+        this.log(`agent-once: dropped an MCP server response for id ${String(message.id)}, which was never forwarded or was already answered`);
+        return;
+      }
       this.forwarded.delete(key);
-      this.sendClient(request !== undefined && 'result' in message ? { ...message, result: this.adjustResult(request, message.result) } : message);
+      this.sendClient('result' in message ? { ...message, result: this.adjustResult(request, message.result) } : message);
       return;
     }
     if (isRequest(message) && isReservedId(message.id)) {

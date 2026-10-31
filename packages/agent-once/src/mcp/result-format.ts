@@ -1,5 +1,6 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { JsonValue } from '../canonical/jcs.js';
+import type { ToolOutcome } from '../guard/types.js';
 import type { ToolClass } from '../ledger/types.js';
 import { STATUS_META_KEY } from './meta.js';
 
@@ -19,8 +20,8 @@ export function errorResult(text: string, meta?: Record<string, unknown>): CallT
   return { content: [textItem(text)], isError: true, ...(meta === undefined ? {} : { _meta: meta }) };
 }
 
-export function statusMeta(status: GuardStatus, actionId: string, toolClass?: ToolClass): Record<string, unknown> {
-  return { [STATUS_META_KEY]: { status, action_id: actionId, ...(toolClass === undefined ? {} : { class: toolClass }) } };
+export function statusMeta(status: GuardStatus, actionId: string, toolClass?: ToolClass, details: Record<string, unknown> = {}): Record<string, unknown> {
+  return { [STATUS_META_KEY]: { status, action_id: actionId, ...(toolClass === undefined ? {} : { class: toolClass }), ...details } };
 }
 
 function asCallToolResult(value: JsonValue | null): CallToolResult | undefined {
@@ -28,8 +29,13 @@ function asCallToolResult(value: JsonValue | null): CallToolResult | undefined {
   return value as unknown as CallToolResult;
 }
 
-export function withStatus(result: CallToolResult, status: GuardStatus, actionId: string): CallToolResult {
-  return { ...result, _meta: { ...result._meta, ...statusMeta(status, actionId) } };
+export function withStatus(result: CallToolResult, status: GuardStatus, actionId: string, details?: Record<string, unknown>): CallToolResult {
+  return { ...result, _meta: { ...result._meta, ...statusMeta(status, actionId, undefined, details) } };
+}
+
+export function executedOutcomeDetails(outcome: ToolOutcome, recorded: boolean): Record<string, unknown> {
+  if (!recorded || outcome.kind === 'abandoned') return { outcome: 'unrecorded' };
+  return outcome.kind === 'ok' ? { outcome: 'confirmed' } : { outcome: 'failed', failure_kind: outcome.kind };
 }
 
 export function replayedResult(replay: ReplayInfo): CallToolResult {

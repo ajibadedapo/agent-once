@@ -65,7 +65,7 @@ There is no automatic discovery. Relative paths in the file are resolved against
 
 ## `approvalWebhook`
 
-Optional. `url` (http or https), `timeoutSeconds` (default 120) and `secretEnv` (the name of an environment variable holding the HMAC secret). See [mcp-proxy.md](mcp-proxy.md#approval-webhook) for the request, the signature and the expected answer.
+Optional. `url` (https, or plain http only for a loopback host such as `localhost` or `127.0.0.1`), `timeoutSeconds` (default 120) and `secretEnv` (the name of an environment variable holding the HMAC secret). See [mcp-proxy.md](mcp-proxy.md#approval-webhook) for the request, the signature and the expected answer.
 
 ## `exposeResolveTool`
 

@@ -153,6 +153,18 @@ describe('loadConfig', () => {
     expect(configError(JSON.stringify({ browser: { enabled: 'maybe' } })).path).toBe('/browser/enabled');
   });
 
+  test('a plain http webhook is accepted only for a loopback host', () => {
+    for (const url of ['http://approvals.example.test/hook', 'http://10.0.0.5:8080/hook', 'http://localhost.example.test/hook']) {
+      const error = configError(JSON.stringify({ approvalWebhook: { url } }));
+      expect(error.path, url).toBe('/approvalWebhook/url');
+      expect(error.message, url).toContain('https');
+    }
+    for (const url of ['http://127.0.0.1:8080/hook', 'http://127.4.5.6/hook', 'http://localhost:3000/hook', 'http://[::1]:9000/hook', 'https://approvals.example.test/hook']) {
+      const { dir, file } = writeConfig(JSON.stringify({ approvalWebhook: { url } }));
+      expect(loadConfig({ path: file, cwd: dir, env: {}, homedir: '/home/user' }).approvalWebhook?.url, url).toBe(url);
+    }
+  });
+
   test('a tool named __proto__ is an ordinary rule and cannot change the rules object', () => {
     const { dir, file } = writeConfig('{ "tools": { "__proto__": { "policy": "pass" }, "send_*": { "policy": "guard" } } }');
     const config = loadConfig({ path: file, cwd: dir, env: {}, homedir: '/home/user' });

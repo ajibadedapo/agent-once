@@ -52,5 +52,13 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2"
+  },
+  "peerDependencies": {
+    "@opentelemetry/api": "^1.9.0"
+  },
+  "peerDependenciesMeta": {
+    "@opentelemetry/api": {
+      "optional": true
+    }
   }
 }

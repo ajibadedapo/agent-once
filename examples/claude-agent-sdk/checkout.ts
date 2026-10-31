@@ -9,19 +9,25 @@ if (apiKey === undefined || apiKey === '') {
   process.stderr.write(
     'This example calls Claude, so it needs ANTHROPIC_API_KEY. Set it and run again, for example:\n' +
       '  npx agent-once chaos serve --port 4100\n' +
-      '  ANTHROPIC_API_KEY=... node examples/claude-agent-sdk/checkout.ts http://127.0.0.1:4100/checkout\n',
+      '  ANTHROPIC_API_KEY=... node examples/claude-agent-sdk/checkout.ts http://127.0.0.1:4100/checkout [session]\n',
   );
   process.exit(1);
 }
 
 const checkoutUrl = process.argv[2] ?? 'http://127.0.0.1:4100/checkout';
+const session = process.argv[3] ?? `checkout-example-${Date.now()}`;
 const configPath = fileURLToPath(new URL('../playwright-mcp/agent-once.config.json', import.meta.url));
 
 const { servers, unguarded } = guardMcpServers(
   { playwright: { command: 'npx', args: [`@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}`, '--headless', '--isolated'] } },
-  { session: 'checkout-example', configPath },
+  { session, configPath },
 );
-if (unguarded.length > 0) process.stderr.write(`agent-once cannot guard these remote servers: ${unguarded.join(', ')}\n`);
+if (unguarded.length > 0) {
+  process.stderr.write(
+    `agent-once guards stdio MCP servers only, so these run unguarded: ${unguarded.join(', ')}. Wrap in-process SDK tools with guardSdkTool instead.\n`,
+  );
+}
+process.stderr.write(`agent-once session: ${session}. Rerunning with the same session within 24 h replays completed orders instead of placing them again.\n`);
 
 const terminal = createInterface({ input: process.stdin, output: process.stderr });
 

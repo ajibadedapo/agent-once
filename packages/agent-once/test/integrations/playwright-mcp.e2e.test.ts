@@ -8,6 +8,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { afterEach, describe, expect, test } from 'vitest';
 import { chaosTargetsPreset } from '../../src/chaos/presets.js';
+import type { FaultKind } from '../../src/chaos/targets/faults.js';
 import { startTargets, type RunningTargets } from '../../src/chaos/targets/server.js';
 import { guardMcpServers } from '../../src/integrations/claude-agent-sdk.js';
 import { systemClock } from '../../src/time/clock.js';
@@ -43,10 +44,10 @@ function tempDir(): string {
   return dir;
 }
 
-async function checkoutTarget(): Promise<RunningTargets> {
+async function checkoutTarget(kind: FaultKind = 'lost_response_after_commit'): Promise<RunningTargets> {
   const targets = await startTargets({ clock: systemClock });
   cleanups.push(() => targets.close());
-  targets.setFaults([{ target: 'checkout', nth: 1, kind: 'lost_response_after_commit', holdMs: 0 }]);
+  targets.setFaults([{ target: 'checkout', nth: 1, kind, holdMs: 0 }]);
   return targets;
 }
 
@@ -128,4 +129,20 @@ describe('Playwright MCP behind the proxy', () => {
     expect(textOf(run.clicks[0] as CallToolResult)).toContain('Page Title: 504 Gateway Timeout');
     expect(targets.truth().checkout).toHaveLength(2);
   }, 60_000);
+
+  test('known limitation, measured: connection_reset_after_commit on the checkout POST is re-sent by Chromium below the MCP layer, so the target records two orders with and without the guard', async () => {
+    const guardedTargets = await checkoutTarget('connection_reset_after_commit');
+    const guardedHome = tempDir();
+    const guardedRun = await naiveCheckout(await connect(guardedServer(guardedHome, join(guardedHome, 'playwright')), guardedHome), guardedTargets.url);
+    const plainTargets = await checkoutTarget('connection_reset_after_commit');
+    const plainHome = tempDir();
+    const plainRun = await naiveCheckout(await connect(playwrightServer(join(plainHome, 'playwright')), plainHome), plainTargets.url);
+    for (const run of [guardedRun, plainRun]) {
+      expect(run).toMatchObject({ confirmed: true });
+      expect(run.clicks).toHaveLength(1);
+    }
+    for (const targets of [guardedTargets, plainTargets]) {
+      expect(targets.truth().checkout.map((effect) => effect.fields.reference)).toEqual(['F-1', 'F-1']);
+    }
+  }, 90_000);
 });

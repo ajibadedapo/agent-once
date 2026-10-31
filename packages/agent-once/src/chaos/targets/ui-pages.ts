@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { STALE_FORM_ERROR } from './api-routes.js';
 import { TARGET_NAMES, TARGETS, type TargetName, type TargetSpec } from './catalog.js';
 import type { TargetsEngine } from './engine.js';
-import { idempotencyKeyOf, readBody, sendHtml } from './http-io.js';
+import { dropConnection, idempotencyKeyOf, readBody, sendHtml } from './http-io.js';
 
 const REFERENCE_FIELD = 'reference';
 const REFERENCE_PATTERN = /^F-\d+$/;
@@ -123,6 +123,9 @@ export async function handleUi(
       return;
     case 'dropped':
       sendHtml(response, 504, page(GATEWAY_TIMEOUT, `<h1>${GATEWAY_TIMEOUT}</h1>\n<p>The server did not answer in time.</p>`));
+      return;
+    case 'reset':
+      dropConnection(request);
       return;
   }
 }

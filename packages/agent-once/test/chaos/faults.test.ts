@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+import { BROWSER_SCENARIOS, isRunnableScenario, SCENARIO_NAMES } from '../../src/chaos/scenarios.js';
 import { parseFaultPlan } from '../../src/chaos/targets/faults.js';
 import { DEFAULT_BROWSER_CONFIG } from '../../src/config/schema.js';
 import { START_MS, formFields, pageText, postForm, postJson, send, targetsOnManualClock } from './chaos-harness.js';
@@ -30,6 +31,28 @@ describe('chaos faults', () => {
     expect(DEFAULT_BROWSER_CONFIG.failureMarkers.some((marker) => new RegExp(marker, 'i').test('Page Title: 504 Gateway Timeout'))).toBe(true);
     expect(targets.truth().checkout.map((effect) => effect.fields.reference)).toEqual(['F-1']);
     expect(targets.truth().booking).toEqual([]);
+  });
+
+  test('connection_reset_after_commit commits and then drops the socket with no answer on both the UI and the API', async () => {
+    const { targets } = await targetsOnManualClock();
+    targets.setFaults([
+      { target: 'checkout', nth: 1, kind: 'connection_reset_after_commit', holdMs: 0 },
+      { target: 'ticket', nth: 1, kind: 'connection_reset_after_commit', holdMs: 0 },
+    ]);
+    await expect(postForm(`${targets.url}/checkout/submit`, formFields((await send(`${targets.url}/checkout`)).body))).rejects.toThrow(/socket hang up|ECONNRESET/);
+    await expect(postJson(`${targets.url}/api/ticket`, { title: 'Printer jam', body: 'Jammed.' })).rejects.toThrow(/socket hang up|ECONNRESET/);
+    expect(targets.truth().checkout.map((effect) => effect.fields.reference)).toEqual(['F-1']);
+    expect(targets.truth().ticket.map((effect) => effect.id)).toEqual(['TCK-1']);
+    expect(targets.pendingCommits()).toBe(0);
+  });
+
+  test('connection_reset_after_commit is a browser-path scenario outside the deterministic API table', () => {
+    expect(BROWSER_SCENARIOS).toEqual({ connection_reset_after_commit: { faultKind: 'connection_reset_after_commit', holdMs: 0, crash: false } });
+    expect(SCENARIO_NAMES).not.toContain('connection_reset_after_commit');
+    expect(isRunnableScenario('connection_reset_after_commit')).toBe(false);
+    expect(parseFaultPlan([{ target: 'checkout', nth: 1, kind: 'connection_reset_after_commit' }])).toEqual([
+      { target: 'checkout', nth: 1, kind: 'connection_reset_after_commit', holdMs: 0 },
+    ]);
   });
 
   test('slow_commit commits only after the clock passes holdMs', async () => {

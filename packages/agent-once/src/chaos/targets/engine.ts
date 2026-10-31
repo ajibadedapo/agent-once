@@ -3,7 +3,7 @@ import type { TargetName } from './catalog.js';
 import { FaultInjector, type FaultPlan } from './faults.js';
 import { EffectStore, type Commit, type Effect } from './store.js';
 
-export type MutationOutcome = { kind: 'committed'; commit: Commit } | { kind: 'stale' } | { kind: 'dropped' };
+export type MutationOutcome = { kind: 'committed'; commit: Commit } | { kind: 'stale' } | { kind: 'dropped' } | { kind: 'reset' };
 
 export interface Mutation {
   target: TargetName;
@@ -33,6 +33,9 @@ export class TargetsEngine {
       case 'lost_response_after_commit':
         this.commit(mutation);
         return { kind: 'dropped' };
+      case 'connection_reset_after_commit':
+        this.commit(mutation);
+        return { kind: 'reset' };
       case 'slow_commit':
         this.commitLater(mutation, mutation.arrivalMs + fault.holdMs);
         return { kind: 'dropped' };

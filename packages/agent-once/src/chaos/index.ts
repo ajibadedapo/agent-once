@@ -8,4 +8,4 @@ export { createTargetsMcpServer, DEFAULT_TARGETS_TIMEOUT_MS, type TargetsMcpOpti
 export { checkEffects, flushPendingCommits, UnscorableRunError, type EffectCheck } from './checker.js';
 export { renderMarkdown, summarize, type MatrixSummary, type RateRow } from './report.js';
 export { agentName, CHAOS_START_MS, runMatrix, runScenario, runsFor, type AgentKind, type MatrixOptions, type RunRecord, type RunScenarioOptions } from './runner.js';
-export { CHAOS_TASKS, SCENARIO_NAMES, SCENARIOS, type ChaosTask, type RunnableScenario, type ScenarioName, type ScenarioSpec } from './scenarios.js';
+export { BROWSER_SCENARIOS, CHAOS_TASKS, SCENARIO_NAMES, SCENARIOS, type BrowserScenarioName, type ChaosTask, type RunnableScenario, type ScenarioName, type ScenarioSpec } from './scenarios.js';

@@ -49,6 +49,7 @@ export async function handleApi(engine: TargetsEngine, target: TargetName, reque
       sendJson(response, 409, { error: STALE_FORM_ERROR });
       return;
     case 'dropped':
+    case 'reset':
       dropConnection(request);
       return;
   }

@@ -49,6 +49,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "pretest:browser": "node scripts/check-chromium.mjs",
     "test:browser": "vitest run --config vitest.browser.config.ts"
   },
   "dependencies": {
@@ -68,6 +69,7 @@
   },
   "devDependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.316",
-    "@playwright/mcp": "0.0.83"
+    "@playwright/mcp": "0.0.83",
+    "zod": "4.6.7"
   }
 }

@@ -1,6 +1,6 @@
 import { isTargetName, TARGET_NAMES, type TargetName } from './catalog.js';
 
-export type FaultKind = 'none' | 'lost_response_after_commit' | 'slow_commit' | 'timeout_before_commit' | 'stale_element';
+export type FaultKind = 'none' | 'lost_response_after_commit' | 'connection_reset_after_commit' | 'slow_commit' | 'timeout_before_commit' | 'stale_element';
 
 export type FaultPlan = { target: TargetName; nth: number; kind: FaultKind; holdMs: number }[];
 
@@ -9,7 +9,7 @@ export interface Fault {
   holdMs: number;
 }
 
-export const FAULT_KINDS: readonly FaultKind[] = ['none', 'lost_response_after_commit', 'slow_commit', 'timeout_before_commit', 'stale_element'];
+export const FAULT_KINDS: readonly FaultKind[] = ['none', 'lost_response_after_commit', 'connection_reset_after_commit', 'slow_commit', 'timeout_before_commit', 'stale_element'];
 
 const NO_FAULT: Fault = Object.freeze({ kind: 'none', holdMs: 0 });
 

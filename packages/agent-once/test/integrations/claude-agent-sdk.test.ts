@@ -1,5 +1,6 @@
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { tool, type ElicitationRequest, type McpServerConfig, type OnElicitation } from '@anthropic-ai/claude-agent-sdk';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -87,6 +88,23 @@ describe('guardMcpServers', () => {
       args: [fileURLToPath(new URL('../../src/cli/main.js', import.meta.url)), 'mcp', '--', 'node', 'shop.js'],
     });
     expect(unguarded).toEqual([]);
+  });
+
+  test('the session option wins over AGENT_ONCE_SESSION in the server env, and without it the env passes through untouched', () => {
+    const env = { AGENT_ONCE_SESSION: 'from-config', SHOP_MODE: 'test' };
+    const withSession = guardMcpServers({ shop: { command: 'node', args: ['shop.js'], env } }, { session: 'from-option', cliPath: '/cli.js' });
+    const withoutSession = guardMcpServers({ shop: { command: 'node', args: ['shop.js'], env } }, { cliPath: '/cli.js' });
+    expect(withSession.servers.shop).toMatchObject({ env: { AGENT_ONCE_SESSION: 'from-option', SHOP_MODE: 'test' } });
+    expect(withoutSession.servers.shop).toMatchObject({ env: { AGENT_ONCE_SESSION: 'from-config', SHOP_MODE: 'test' } });
+    expect(env).toEqual({ AGENT_ONCE_SESSION: 'from-config', SHOP_MODE: 'test' });
+  });
+
+  test('the built package resolves a default cliPath that exists', async () => {
+    const built = (await import(pathToFileURL(join(PACKAGE_DIR, 'dist/integrations/claude-agent-sdk.js')).href)) as { guardMcpServers: typeof guardMcpServers };
+    const wrapped = built.guardMcpServers({ shop: { command: 'node', args: ['shop.js'] } }).servers.shop;
+    const cliPath = wrapped !== undefined && 'args' in wrapped ? wrapped.args?.[0] : undefined;
+    expect(cliPath).toBe(BUILT_CLI);
+    expect(existsSync(BUILT_CLI)).toBe(true);
   });
 
   describe('a wrapped config', () => {

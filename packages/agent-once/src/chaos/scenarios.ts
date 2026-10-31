@@ -19,6 +19,12 @@ export const SCENARIOS: Readonly<Record<ScenarioName, ScenarioSpec>> = {
   crash_mid_run: { faultKind: 'slow_commit', holdMs: 5_000, crash: true },
 };
 
+export type BrowserScenarioName = 'connection_reset_after_commit';
+
+export const BROWSER_SCENARIOS: Readonly<Record<BrowserScenarioName, ScenarioSpec>> = {
+  connection_reset_after_commit: { faultKind: 'connection_reset_after_commit', holdMs: 0, crash: false },
+};
+
 export const SCENARIO_NAMES = Object.keys(SCENARIOS) as ScenarioName[];
 
 export const NO_FAULT: ScenarioSpec = Object.freeze({ faultKind: 'none', holdMs: 0, crash: false });

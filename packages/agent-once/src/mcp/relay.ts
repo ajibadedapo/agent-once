@@ -65,8 +65,8 @@ export class Correlator {
     });
   }
 
-  forget(id: string): void {
-    this.pending.delete(id);
+  forget(id: string): boolean {
+    return this.pending.delete(id);
   }
 
   settle(message: JSONRPCMessage & { id: RequestId }): boolean {

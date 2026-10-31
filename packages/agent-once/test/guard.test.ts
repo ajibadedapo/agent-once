@@ -428,8 +428,9 @@ describe('Guard.resolve', () => {
     for (const toolClass of ['money', 'irreversible'] as const) {
       const { guard, clock, id } = await inDoubt(toolClass);
       clock.advance(10_000);
-      expect(guard.resolve(id, 'happened', 'agent')).toEqual({ ok: false, reason: 'agent_cannot_resolve_class' });
-      expect(guard.resolve(id, 'not_happened', 'agent')).toEqual({ ok: false, reason: 'agent_cannot_resolve_class' });
+      const refusal = { ok: false, reason: 'agent_cannot_resolve_class', event: { actionId: id, toolClass } };
+      expect(guard.resolve(id, 'happened', 'agent')).toMatchObject(refusal);
+      expect(guard.resolve(id, 'not_happened', 'agent')).toMatchObject(refusal);
       expect(guard.resolve(id, 'happened', 'human').ok).toBe(true);
     }
   });

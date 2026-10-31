@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { Guard } from '../../guard/guard.js';
+import { createHumanResolver } from '../../mcp/doubt/human-resolver.js';
 import { createProxy, type RunningProxy } from '../../mcp/proxy.js';
 import { UpstreamStdioTransport } from '../../mcp/upstream.js';
 import { SESSION_ENV } from '../../mcp/meta.js';
@@ -48,7 +49,15 @@ export async function runMcp(args: string[], io: CliIo): Promise<number> {
     proxy = await createProxy({
       client: new StdioServerTransport(),
       upstream,
-      guard: () => new Guard({ store, clock: systemClock, runInstance, evidence: evidenceSink(config), ...guardSettings(config) }),
+      guard: (ctx) =>
+        new Guard({
+          store,
+          clock: systemClock,
+          runInstance,
+          evidence: evidenceSink(config),
+          humanResolver: createHumanResolver(ctx, config, env, { log: (message) => io.stderr(`${message}\n`) }),
+          ...guardSettings(config),
+        }),
       config,
       clock: systemClock,
       cwd: io.cwd,

@@ -107,7 +107,7 @@ describe('guarded tools/call', () => {
     workspace.clock.advance(5_000);
     const retry = await client.callTool({ name: 'increment', arguments: { fail: true } });
     expect(retry.isError).toBe(true);
-    expect(statusOf(retry)).toEqual({ status: 'in_doubt', action_id: statusOf(first)?.action_id });
+    expect(statusOf(retry)).toEqual({ status: 'in_doubt', action_id: statusOf(first)?.action_id, class: 'standard' });
     expect(textOf(retry)).toContain('agent_once_resolve');
     expect((await stats(client)).count).toBe(1);
   });

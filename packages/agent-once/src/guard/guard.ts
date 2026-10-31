@@ -203,7 +203,7 @@ export class Guard {
       const latest = tx.latest(found.intentHash);
       const nowMs = this.clock.nowMs();
       if (latest === undefined || latest.actionId !== actionId || !isUnresolved(latest, nowMs)) return { ok: false, reason: 'not_in_doubt' };
-      if (by === 'agent' && latest.toolClass !== 'standard') return { ok: false, reason: 'agent_cannot_resolve_class' };
+      if (by === 'agent' && latest.toolClass !== 'standard') return { ok: false, reason: 'agent_cannot_resolve_class', event: latest };
       if (by === 'agent' && outcome === 'not_happened' && nowMs - latest.atMs < this.settleWindowMs) return { ok: false, reason: 'too_soon' };
       return { ok: true, event: tx.append(this.followUp(latest, 'reconciled', { outcome, resolved_by: by, result: null, result_truncated: false })) };
     });

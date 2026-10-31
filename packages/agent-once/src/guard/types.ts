@@ -68,7 +68,8 @@ export type ResolvedBy = 'agent' | 'human' | 'webhook';
 
 export type ResolveResult =
   | { ok: true; event: LedgerEvent }
-  | { ok: false; reason: 'unknown_action' | 'not_in_doubt' | 'agent_cannot_resolve_class' | 'too_soon' }
+  | { ok: false; reason: 'unknown_action' | 'not_in_doubt' | 'too_soon' }
+  | { ok: false; reason: 'agent_cannot_resolve_class'; event: LedgerEvent }
   | { ok: false; reason: 'ledger_unavailable'; error: string };
 
 export class ActionInDoubtError extends Error {

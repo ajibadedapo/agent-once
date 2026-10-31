@@ -12,14 +12,14 @@ import { CanonicalizationError, type JsonValue } from '../canonical/jcs.js';
 import type { AgentOnceConfig } from '../config/schema.js';
 import type { Guard } from '../guard/guard.js';
 import type { ExecuteContext, GuardResult, GuardedCall, Reconciler, ToolOutcome } from '../guard/types.js';
+import type { ToolClass } from '../ledger/types.js';
 import type { Clock } from '../time/clock.js';
 import { ACTION_META_KEY, INTENT_META_KEY, metaString } from './meta.js';
 import { Correlator, idKey, isNotification, isRequest, isReservedId, isResponse, UpstreamClosedError, type RpcResponse } from './relay.js';
 import { handleResolveCall, RESOLVE_TOOL, RESOLVE_TOOL_NAME } from './resolve-tool.js';
+import { blockedToolResult, inDoubtToolResult } from './doubt/messages.js';
 import {
-  blockedResult,
   callFailedResult,
-  inDoubtResult,
   ledgerUnavailableResult,
   replayedResult,
   unidentifiableCallResult,
@@ -34,7 +34,7 @@ export interface ProxyContext {
   readonly clientCapabilities: ClientCapabilities;
   readonly clientInfo?: Implementation;
   readonly clock: Clock;
-  requestClient(method: string, params: unknown): Promise<unknown>;
+  requestClient(method: string, params: unknown, options?: { signal?: AbortSignal }): Promise<unknown>;
   callUpstreamTool(name: string, args: Record<string, unknown>): Promise<CallToolResult>;
 }
 
@@ -80,6 +80,7 @@ interface ForwardedRequest {
 interface GuardedRequest {
   id: RequestId;
   tool: string;
+  toolClass: ToolClass;
   actionId?: string;
   raw?: RpcResponse;
   controller: AbortController;
@@ -199,7 +200,7 @@ class McpProxy implements RunningProxy {
       get clock() {
         return proxy.clock;
       },
-      requestClient: (method, params) => this.requestClient(method, params),
+      requestClient: (method, params, options) => this.requestClient(method, params, options?.signal),
       callUpstreamTool: (name, args) => this.callUpstreamTool(name, args),
     };
   }
@@ -269,7 +270,7 @@ class McpProxy implements RunningProxy {
       this.forward(request, tool, args);
       return;
     }
-    const entry: GuardedRequest = { id: request.id, tool, controller: new AbortController(), answered: false };
+    const entry: GuardedRequest = { id: request.id, tool, toolClass: call.toolClass, controller: new AbortController(), answered: false };
     this.guarded.set(idKey(request.id), entry);
     void this.runGuarded(entry, { ...call, signal: entry.controller.signal }, params);
   }
@@ -435,9 +436,9 @@ class McpProxy implements RunningProxy {
       case 'replayed':
         return { kind: 'result', result: replayedResult(result) };
       case 'in_doubt':
-        return { kind: 'result', result: inDoubtResult(result.doubt, this.config.exposeResolveTool && result.doubt.toolClass === 'standard') };
+        return { kind: 'result', result: inDoubtToolResult(result.doubt, this.config.exposeResolveTool && result.doubt.toolClass === 'standard') };
       case 'blocked':
-        return { kind: 'result', result: blockedResult(result.doubt) };
+        return { kind: 'result', result: blockedToolResult(result.doubt) };
       case 'ledger_unavailable':
         return { kind: 'result', result: ledgerUnavailableResult(result.error) };
     }
@@ -568,7 +569,8 @@ class McpProxy implements RunningProxy {
     return result;
   }
 
-  private async requestClient(method: string, params: unknown): Promise<unknown> {
+  private async requestClient(method: string, params: unknown, signal?: AbortSignal): Promise<unknown> {
+    signal?.throwIfAborted();
     const id = this.clientRequests.nextId();
     const response = this.clientRequests.expect(id);
     try {
@@ -577,9 +579,22 @@ class McpProxy implements RunningProxy {
       this.clientRequests.forget(id);
       throw error;
     }
-    const reply = await response;
+    const reply = await (signal === undefined ? response : this.untilAborted(id, response, signal));
     if (reply.kind === 'error') throw new Error(`${method} failed: ${reply.error.message}`);
     return reply.result;
+  }
+
+  private untilAborted(id: string, response: Promise<RpcResponse>, signal: AbortSignal): Promise<RpcResponse> {
+    return new Promise((settle, fail) => {
+      const onAbort = (): void => {
+        if (!this.clientRequests.forget(id)) return;
+        this.sendClient({ jsonrpc: '2.0', method: CANCELLED, params: { requestId: id, reason: 'agent-once stopped waiting for an answer' } });
+        fail(signal.reason);
+      };
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+      response.then(settle, fail).finally(() => signal.removeEventListener('abort', onAbort));
+    });
   }
 
   private sendUpstream(message: JSONRPCMessage): void {
@@ -613,7 +628,7 @@ class McpProxy implements RunningProxy {
     for (const entry of this.guarded.values()) {
       if (entry.answered || entry.controller.signal.aborted) continue;
       entry.answered = true;
-      sends.push(this.sendClientAsync({ jsonrpc: '2.0', id: entry.id, result: upstreamExitedResult(entry.tool, entry.actionId, exitCode) }));
+      sends.push(this.sendClientAsync({ jsonrpc: '2.0', id: entry.id, result: upstreamExitedResult(entry.tool, entry.actionId, exitCode, entry.toolClass) }));
     }
     for (const request of this.forwarded.values()) {
       const message: JSONRPCMessage =

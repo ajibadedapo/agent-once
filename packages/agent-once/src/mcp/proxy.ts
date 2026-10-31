@@ -14,9 +14,9 @@ import type { Guard } from '../guard/guard.js';
 import type { ExecuteContext, GuardResult, GuardedCall, Reconciler, ToolOutcome } from '../guard/types.js';
 import type { ToolClass } from '../ledger/types.js';
 import type { Clock } from '../time/clock.js';
-import { ACTION_META_KEY, INTENT_META_KEY, metaString } from './meta.js';
+import { ACTION_META_KEY, INTENT_META_KEY, metaString, RESOLVE_TOOL_NAME } from './meta.js';
 import { Correlator, idKey, isNotification, isRequest, isReservedId, isResponse, UpstreamClosedError, type RpcResponse } from './relay.js';
-import { handleResolveCall, RESOLVE_TOOL, RESOLVE_TOOL_NAME } from './resolve-tool.js';
+import { handleResolveCall, RESOLVE_TOOL } from './resolve-tool.js';
 import { blockedToolResult, inDoubtToolResult } from './doubt/messages.js';
 import {
   callFailedResult,

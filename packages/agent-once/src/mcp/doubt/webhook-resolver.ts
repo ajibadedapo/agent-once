@@ -9,17 +9,40 @@ export interface WebhookResolverConfig {
 }
 
 export const SIGNATURE_HEADER = 'X-Agent-Once-Signature';
+export const MAX_WEBHOOK_RESPONSE_BYTES = 4096;
+const UNRESOLVED: HumanResolution = { outcome: 'unresolved' };
 
-type Attempt = { outcome: HumanResolution } | { problem: string };
+type Attempt = { answer: HumanResolution } | { problem: string } | { cancelled: true };
 
-function outcomeOf(body: unknown): HumanResolution | undefined {
+class ResponseTooLargeError extends Error {}
+
+function answerOf(body: unknown): HumanResolution | undefined {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) return undefined;
   const outcome = (body as { outcome?: unknown }).outcome;
-  return outcome === 'happened' || outcome === 'not_happened' || outcome === 'unresolved' ? outcome : undefined;
+  if (outcome === 'happened' || outcome === 'not_happened') return { outcome, by: 'webhook' };
+  return outcome === 'unresolved' ? UNRESOLVED : undefined;
 }
 
 function problemOf(error: unknown): string {
   return error instanceof Error ? error.name : 'unknown error';
+}
+
+async function readCapped(response: Response): Promise<string> {
+  if (response.body === null) return '';
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_WEBHOOK_RESPONSE_BYTES) {
+      await reader.cancel().catch(() => {});
+      throw new ResponseTooLargeError();
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 export class WebhookResolver implements HumanResolver {
@@ -30,22 +53,30 @@ export class WebhookResolver implements HumanResolver {
     private readonly log: (message: string) => void = () => {},
   ) {}
 
-  async resolve(doubt: DoubtInfo): Promise<HumanResolution> {
+  async resolve(doubt: DoubtInfo, signal?: AbortSignal): Promise<HumanResolution> {
+    if (signal?.aborted === true) return UNRESOLVED;
     const controller = new AbortController();
     let timer: { cancel(): void } | undefined;
-    const timedOut = new Promise<Attempt>((settle) => {
+    let onCancel: (() => void) | undefined;
+    const stopped = new Promise<Attempt>((settle) => {
       timer = this.clock.setTimer(this.cfg.timeoutSeconds * 1000, () => {
-        controller.abort();
         settle({ problem: `no answer within ${this.cfg.timeoutSeconds} s` });
+        controller.abort();
       });
+      onCancel = () => {
+        settle({ cancelled: true });
+        controller.abort();
+      };
+      signal?.addEventListener('abort', onCancel, { once: true });
     });
     try {
-      const attempt = await Promise.race([this.ask(doubt, controller.signal), timedOut]);
-      if ('outcome' in attempt) return attempt.outcome;
-      this.log(`agent-once: the approval webhook gave no usable answer for action ${doubt.actionId}: ${attempt.problem}`);
-      return 'unresolved';
+      const attempt = await Promise.race([this.ask(doubt, controller.signal), stopped]);
+      if ('answer' in attempt) return attempt.answer;
+      if ('problem' in attempt) this.log(`agent-once: the approval webhook gave no usable answer for action ${doubt.actionId}: ${attempt.problem}`);
+      return UNRESOLVED;
     } finally {
       timer?.cancel();
+      if (onCancel !== undefined) signal?.removeEventListener('abort', onCancel);
     }
   }
 
@@ -65,18 +96,22 @@ export class WebhookResolver implements HumanResolver {
     let text: string;
     try {
       response = await this.fetchImpl(this.cfg.url, { method: 'POST', headers, body, signal, redirect: 'error' });
-      text = await response.text();
+      if (response.status !== 200) {
+        await response.body?.cancel().catch(() => {});
+        return { problem: `HTTP ${response.status}` };
+      }
+      text = await readCapped(response);
     } catch (error) {
+      if (error instanceof ResponseTooLargeError) return { problem: `the response is larger than ${MAX_WEBHOOK_RESPONSE_BYTES / 1024} KiB` };
       return { problem: `the request failed (${problemOf(error)})` };
     }
-    if (response.status !== 200) return { problem: `HTTP ${response.status}` };
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);
     } catch {
       return { problem: 'the response is not JSON' };
     }
-    const outcome = outcomeOf(parsed);
-    return outcome === undefined ? { problem: 'the response has no outcome of happened, not_happened or unresolved' } : { outcome };
+    const answer = answerOf(parsed);
+    return answer === undefined ? { problem: 'the response has no outcome of happened, not_happened or unresolved' } : { answer };
   }
 }

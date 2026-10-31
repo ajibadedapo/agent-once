@@ -64,7 +64,7 @@ type Step = GuardResult | typeof DECIDE_AGAIN;
 interface Resolution {
   event: LedgerEvent;
   outcome: 'happened' | 'not_happened';
-  by: 'reconciler' | 'human';
+  by: 'reconciler' | 'human' | 'webhook';
   result?: JsonValue;
 }
 
@@ -140,6 +140,14 @@ function replayed(event: LedgerEvent, reason: string): GuardResult {
 function isReconcileOutcome(value: unknown): value is ReconcileOutcome {
   if (typeof value !== 'object' || value === null || !('outcome' in value)) return false;
   return value.outcome === 'happened' || value.outcome === 'not_happened' || value.outcome === 'unknown';
+}
+
+const UNRESOLVED: HumanResolution = { outcome: 'unresolved' };
+
+function isHumanAnswer(value: unknown): value is { outcome: 'happened' | 'not_happened'; by: 'human' | 'webhook' } {
+  if (typeof value !== 'object' || value === null) return false;
+  const { outcome, by } = value as { outcome?: unknown; by?: unknown };
+  return (outcome === 'happened' || outcome === 'not_happened') && (by === 'human' || by === 'webhook');
 }
 
 export class Guard {
@@ -398,9 +406,9 @@ export class Guard {
       if (outcome.outcome !== 'unknown') return { event, by: 'reconciler', ...outcome };
     }
     if (call.policy === 'guard') return { status: 'in_doubt', doubt };
-    const answer = await this.askHuman(doubt);
-    if (answer === 'unresolved') return { status: 'blocked', doubt };
-    return { event, by: 'human', outcome: answer };
+    const answer = await this.askHuman(doubt, call.signal);
+    if (answer.outcome === 'unresolved') return { status: 'blocked', doubt };
+    return { event, by: answer.by, outcome: answer.outcome };
   }
 
   private async reconcile(call: ProtectedCall, event: LedgerEvent): Promise<ReconcileOutcome> {
@@ -418,13 +426,13 @@ export class Guard {
     return outcome;
   }
 
-  private async askHuman(doubt: DoubtInfo): Promise<HumanResolution> {
-    if (this.humanResolver === undefined) return 'unresolved';
+  private async askHuman(doubt: DoubtInfo, signal: AbortSignal | undefined): Promise<HumanResolution> {
+    if (this.humanResolver === undefined) return UNRESOLVED;
     try {
-      const answer = await this.humanResolver.resolve(doubt);
-      return answer === 'happened' || answer === 'not_happened' ? answer : 'unresolved';
+      const answer: unknown = await this.humanResolver.resolve(doubt, signal);
+      return isHumanAnswer(answer) ? { outcome: answer.outcome, by: answer.by } : UNRESOLVED;
     } catch {
-      return 'unresolved';
+      return UNRESOLVED;
     }
   }
 

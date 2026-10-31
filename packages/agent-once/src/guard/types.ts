@@ -29,10 +29,10 @@ export interface DoubtInfo {
   sinceMs: number;
 }
 
-export type HumanResolution = 'happened' | 'not_happened' | 'unresolved';
+export type HumanResolution = { outcome: 'happened' | 'not_happened'; by: 'human' | 'webhook' } | { outcome: 'unresolved' };
 
 export interface HumanResolver {
-  resolve(doubt: DoubtInfo): Promise<HumanResolution>;
+  resolve(doubt: DoubtInfo, signal?: AbortSignal): Promise<HumanResolution>;
 }
 
 export interface GuardedCall {

@@ -1,11 +1,8 @@
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { Guard } from '../guard/guard.js';
-import type { DoubtInfo } from '../guard/types.js';
-import type { LedgerEvent } from '../ledger/types.js';
 import { blockedToolResult } from './doubt/messages.js';
+import { RESOLVE_TOOL_NAME } from './meta.js';
 import { invalidResolveArgsResult, resolveRecordedResult, resolveRefusedResult } from './result-format.js';
-
-export const RESOLVE_TOOL_NAME = 'agent_once_resolve';
 
 export const RESOLVE_TOOL: Tool = {
   name: RESOLVE_TOOL_NAME,
@@ -23,10 +20,6 @@ export const RESOLVE_TOOL: Tool = {
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 };
 
-function doubtOf(event: LedgerEvent): DoubtInfo {
-  return { actionId: event.actionId, tool: event.tool, args: {}, toolClass: event.toolClass, reason: 'agent_cannot_resolve_class', sinceMs: event.atMs };
-}
-
 export function handleResolveCall(args: Record<string, unknown>, guard: Guard): CallToolResult {
   const actionId = args.action_id;
   const outcome = args.outcome;
@@ -34,6 +27,6 @@ export function handleResolveCall(args: Record<string, unknown>, guard: Guard): 
   if (outcome !== 'happened' && outcome !== 'not_happened') return invalidResolveArgsResult('outcome "happened" or "not_happened"');
   const resolved = guard.resolve(actionId, outcome, 'agent');
   if (resolved.ok) return resolveRecordedResult(actionId, outcome);
-  if (resolved.reason === 'agent_cannot_resolve_class') return blockedToolResult(doubtOf(resolved.event));
+  if (resolved.reason === 'agent_cannot_resolve_class') return blockedToolResult(resolved.event);
   return resolveRefusedResult(actionId, resolved.reason, 'error' in resolved ? resolved.error : undefined);
 }

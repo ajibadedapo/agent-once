@@ -79,7 +79,7 @@ class World {
           runInstance: `proc-${index}`,
           evidence: this.evidence,
           settleWindowMs: SETTLE_WINDOW_MS,
-          humanResolver: { resolve: async () => 'unresolved' },
+          humanResolver: { resolve: async () => ({ outcome: 'unresolved' }) },
         }),
     );
     this.effects = new Array<number>(scenario.intents).fill(0);

@@ -14,6 +14,9 @@ import { ManualClock } from '../../src/time/clock.js';
 import { START_MS, startProxy, stats, statusOf, STATUS_KEY, textOf, Workspace } from './proxy-harness.js';
 
 const HOOK_URL = 'https://approvals.example.test/hook';
+const UNRESOLVED: HumanResolution = { outcome: 'unresolved' };
+const byHuman = (outcome: 'happened' | 'not_happened'): HumanResolution => ({ outcome, by: 'human' });
+const byWebhook = (outcome: 'happened' | 'not_happened'): HumanResolution => ({ outcome, by: 'webhook' });
 
 const DOUBT: DoubtInfo = {
   actionId: 'ao_0123456789abcdef01234567',
@@ -60,11 +63,13 @@ function fakeContext(clock: ManualClock, capabilities: ProxyContext['clientCapab
   return { ctx, requests };
 }
 
-function fixed(answer: HumanResolution): HumanResolver & { asked: number } {
+function fixed(answer: HumanResolution): HumanResolver & { asked: number; signals: (AbortSignal | undefined)[] } {
   const resolver = {
     asked: 0,
-    resolve: async () => {
+    signals: [] as (AbortSignal | undefined)[],
+    resolve: async (_doubt: DoubtInfo, signal?: AbortSignal) => {
       resolver.asked += 1;
+      resolver.signals.push(signal);
       return answer;
     },
   };
@@ -149,7 +154,8 @@ describe('elicitation', () => {
         },
       },
     ]);
-    expect(sink.events.some((event) => event.kind === 'state' && event.detail.state === 'reconciled' && event.detail.outcome === 'happened')).toBe(true);
+    const reconciled = sink.events.filter((event) => event.kind === 'state' && event.detail.state === 'reconciled');
+    expect(reconciled.map((event) => [event.detail.outcome, event.detail.resolved_by])).toEqual([['happened', 'human']]);
     expect((await stats(client)).count).toBe(1);
   });
 
@@ -173,7 +179,7 @@ describe('elicitation', () => {
   test('a client that declared only url elicitation is not sent a form request', async () => {
     const clock = new ManualClock(START_MS);
     const { ctx, requests } = fakeContext(clock, { elicitation: { url: {} } }, async () => ({ action: 'accept', content: { agent_once_outcome: 'happened' } }));
-    expect(await new ElicitationResolver(ctx).resolve(DOUBT)).toBe('unresolved');
+    expect(await new ElicitationResolver(ctx).resolve(DOUBT)).toEqual(UNRESOLVED);
     expect(requests).toEqual([]);
   });
 
@@ -196,7 +202,7 @@ describe('elicitation', () => {
     const resolver = new ElicitationResolver(ctx);
     const results: HumanResolution[] = [];
     for (let i = 0; i <= answers.length; i += 1) results.push(await resolver.resolve(DOUBT));
-    expect(results).toEqual(['not_happened', 'unresolved', 'unresolved', 'unresolved', 'unresolved', 'unresolved']);
+    expect(results).toEqual([byHuman('not_happened'), UNRESOLVED, UNRESOLVED, UNRESOLVED, UNRESOLVED, UNRESOLVED]);
     expect(requests.map((request) => request.method)).toEqual(Array(answers.length + 1).fill('elicitation/create'));
     expect(requests[0]?.params).toEqual({ message: doubtQuestion(DOUBT), requestedSchema: ELICITATION_SCHEMA });
   });
@@ -213,7 +219,7 @@ describe('elicitation', () => {
     await Promise.resolve();
     expect(settled).toBeUndefined();
     clock.advance(1);
-    expect(await pending).toBe('unresolved');
+    expect(await pending).toEqual(UNRESOLVED);
     expect(requests[0]?.signal?.aborted).toBe(true);
   });
 
@@ -222,12 +228,12 @@ describe('elicitation', () => {
     const { ctx } = fakeContext(clock, { elicitation: {} }, () => new Promise(() => {}));
     const byDefault = createHumanResolver(ctx, workspace.config(), {}).resolve(DOUBT);
     clock.advance(300_000);
-    expect(await byDefault).toBe('unresolved');
+    expect(await byDefault).toEqual(UNRESOLVED);
 
     const { fetchImpl } = fakeFetch(() => json({ outcome: 'happened' }));
     const chained = createHumanResolver(ctx, withWebhook(workspace.config(), 45), {}, { fetchImpl }).resolve(DOUBT);
     clock.advance(45_000);
-    expect(await chained).toBe('happened');
+    expect(await chained).toEqual(byWebhook('happened'));
   });
 
   test('a client that never answers is told the question is withdrawn and the call is blocked', async () => {
@@ -259,10 +265,73 @@ describe('elicitation', () => {
     expect(logs).toEqual([]);
   });
 
+  test('elicitation failures are logged with the action id and error name only', async () => {
+    const clock = new ManualClock(START_MS);
+    const logs: string[] = [];
+    let attempt = 0;
+    const { ctx } = fakeContext(clock, { elicitation: {} }, () => {
+      attempt += 1;
+      return attempt === 1 ? Promise.reject(new TypeError('visa s3cret')) : new Promise(() => {});
+    });
+    const resolver = new ElicitationResolver(ctx, 60_000, (line) => logs.push(line));
+    expect(await resolver.resolve(DOUBT)).toEqual(UNRESOLVED);
+    const pending = resolver.resolve(DOUBT);
+    clock.advance(60_000);
+    expect(await pending).toEqual(UNRESOLVED);
+    expect(logs).toEqual([
+      `agent-once: the client gave no answer to the question about action ${DOUBT.actionId}: the request failed (TypeError)`,
+      `agent-once: the client gave no answer to the question about action ${DOUBT.actionId}: no answer within 60 s`,
+    ]);
+  });
+
+  test('a client cancel of the call withdraws the question and skips the webhook', async () => {
+    const { fetchImpl, calls } = fakeFetch(() => json({ outcome: 'happened' }));
+    const config = withWebhook(workspace.config());
+    let answered: Promise<HumanResolution> | undefined;
+    const { client, logs } = await startProxy(workspace, {
+      config,
+      capabilities: { elicitation: {} },
+      humanResolver: (ctx) => {
+        const inner = createHumanResolver(ctx, config, {}, { fetchImpl });
+        return {
+          resolve: (doubt, signal) => {
+            answered = inner.resolve(doubt, signal);
+            return answered;
+          },
+        };
+      },
+    });
+    let asked: () => void = () => {};
+    const question = new Promise<void>((wake) => {
+      asked = wake;
+    });
+    let withdrawn: unknown;
+    client.setRequestHandler(ElicitRequestSchema, (_request, extra) => {
+      asked();
+      return new Promise<ElicitResult>((settle) => {
+        extra.signal.addEventListener('abort', () => {
+          withdrawn = extra.signal.reason;
+          settle({ action: 'cancel' });
+        });
+      });
+    });
+    await client.callTool({ name: 'charge', arguments: { amount: 10, fail: true } });
+    const controller = new AbortController();
+    const retry = client.callTool({ name: 'charge', arguments: { amount: 10, fail: true } }, undefined, { signal: controller.signal });
+    await question;
+    controller.abort(new Error('user pressed stop'));
+    await expect(retry).rejects.toThrow();
+    expect(await answered).toEqual(UNRESOLVED);
+    expect(String(withdrawn)).toContain('agent-once stopped waiting for an answer');
+    expect(calls).toEqual([]);
+    expect((await stats(client)).count).toBe(1);
+    expect(logs.filter((line) => line.includes('no answer'))).toEqual([]);
+  });
+
   test('decline falls back to the webhook', async () => {
     const { fetchImpl, calls } = fakeFetch(() => json({ outcome: 'not_happened' }));
     const config = withWebhook(workspace.config());
-    const { client } = await startProxy(workspace, {
+    const { client, store } = await startProxy(workspace, {
       config,
       capabilities: { elicitation: {} },
       humanResolver: (ctx) => createHumanResolver(ctx, config, {}, { fetchImpl }),
@@ -272,12 +341,15 @@ describe('elicitation', () => {
       elicited += 1;
       return { action: 'decline' };
     });
-    await client.callTool({ name: 'charge', arguments: { amount: 10, fail: true } });
+    const first = await client.callTool({ name: 'charge', arguments: { amount: 10, fail: true } });
     workspace.clock.advance(10_000);
     const retry = await client.callTool({ name: 'charge', arguments: { amount: 10, fail: true } });
     expect(statusOf(retry)?.status).toBe('executed');
     expect(elicited).toBe(1);
     expect(calls).toHaveLength(1);
+    const reconciled = store.findAction(statusOf(first)?.action_id ?? '');
+    expect(reconciled?.state).toBe('reconciled');
+    expect(reconciled?.detail).toMatchObject({ outcome: 'not_happened', resolved_by: 'webhook' });
     expect((await stats(client)).count).toBe(2);
   });
 });
@@ -289,11 +361,12 @@ describe('approval webhook', () => {
     let next = 0;
     const { fetchImpl, calls } = fakeFetch(() => json({ outcome: outcomes[next++] }));
     const resolver = new WebhookResolver({ url: HOOK_URL, timeoutSeconds: 30, secret: 's3cret' }, clock, fetchImpl);
-    expect([await resolver.resolve(DOUBT), await resolver.resolve(DOUBT), await resolver.resolve(DOUBT)]).toEqual(['happened', 'not_happened', 'unresolved']);
+    expect([await resolver.resolve(DOUBT), await resolver.resolve(DOUBT), await resolver.resolve(DOUBT)]).toEqual([byWebhook('happened'), byWebhook('not_happened'), UNRESOLVED]);
 
     const [call] = calls;
     expect(call?.url).toBe(HOOK_URL);
     expect(call?.init.method).toBe('POST');
+    expect(call?.init.redirect).toBe('error');
     const body = String(call?.init.body);
     expect(JSON.parse(body)).toEqual({
       type: 'agent-once.approval_request',
@@ -307,6 +380,46 @@ describe('approval webhook', () => {
     const headers = new Headers(call?.init.headers);
     expect(headers.get('content-type')).toBe('application/json');
     expect(headers.get('x-agent-once-signature')).toBe(`sha256=${createHmac('sha256', 's3cret').update(body).digest('hex')}`);
+  });
+
+  test('a response body over 4 KiB is unresolved and one at the limit is read', async () => {
+    const clock = new ManualClock(START_MS);
+    const logs: string[] = [];
+    const padded = (size: number) => {
+      const base = JSON.stringify({ outcome: 'happened', pad: '' });
+      return JSON.stringify({ outcome: 'happened', pad: 'x'.repeat(size - base.length) });
+    };
+    const bodies = [padded(4096), padded(4097)];
+    let next = 0;
+    const { fetchImpl } = fakeFetch(() => new Response(bodies[next++] ?? '', { status: 200 }));
+    const resolver = new WebhookResolver({ url: HOOK_URL, timeoutSeconds: 30 }, clock, fetchImpl, (line) => logs.push(line));
+    expect(await resolver.resolve(DOUBT)).toEqual(byWebhook('happened'));
+    expect(await resolver.resolve(DOUBT)).toEqual(UNRESOLVED);
+    expect(logs).toEqual([`agent-once: the approval webhook gave no usable answer for action ${DOUBT.actionId}: the response is larger than 4 KiB`]);
+  });
+
+  test('a cancelled call skips the webhook, and a cancel mid-request aborts it', async () => {
+    const clock = new ManualClock(START_MS);
+    const { fetchImpl, calls } = fakeFetch(() => json({ outcome: 'happened' }));
+    const cancelled = new AbortController();
+    cancelled.abort();
+    expect(await new WebhookResolver({ url: HOOK_URL, timeoutSeconds: 30 }, clock, fetchImpl).resolve(DOUBT, cancelled.signal)).toEqual(UNRESOLVED);
+    expect(calls).toEqual([]);
+
+    let signal: AbortSignal | undefined;
+    const hanging = new WebhookResolver(
+      { url: HOOK_URL, timeoutSeconds: 30 },
+      clock,
+      ((_url: string, init?: RequestInit) => {
+        signal = init?.signal ?? undefined;
+        return new Promise(() => {});
+      }) as typeof fetch,
+    );
+    const midway = new AbortController();
+    const pending = hanging.resolve(DOUBT, midway.signal);
+    midway.abort();
+    expect(await pending).toEqual(UNRESOLVED);
+    expect(signal?.aborted).toBe(true);
   });
 
   test('without a secret the body is not signed', async () => {
@@ -328,10 +441,10 @@ describe('approval webhook', () => {
     let next = 0;
     const { fetchImpl } = fakeFetch(() => (replies[next++] ?? (() => json({})))());
     const resolver = new WebhookResolver({ url: HOOK_URL, timeoutSeconds: 30, secret: 's3cret' }, clock, fetchImpl, (line) => logs.push(line));
-    for (let i = 0; i < replies.length; i += 1) expect(await resolver.resolve(DOUBT)).toBe('unresolved');
+    for (let i = 0; i < replies.length; i += 1) expect(await resolver.resolve(DOUBT)).toEqual(UNRESOLVED);
 
     const failing = new WebhookResolver({ url: HOOK_URL, timeoutSeconds: 30 }, clock, (() => Promise.reject(new TypeError('fetch failed'))) as typeof fetch);
-    expect(await failing.resolve(DOUBT)).toBe('unresolved');
+    expect(await failing.resolve(DOUBT)).toEqual(UNRESOLVED);
 
     let signal: AbortSignal | undefined;
     const hanging = new WebhookResolver(
@@ -353,7 +466,7 @@ describe('approval webhook', () => {
     expect(settled).toBeUndefined();
     expect(signal?.aborted).toBe(false);
     clock.advance(1);
-    expect(await pending).toBe('unresolved');
+    expect(await pending).toEqual(UNRESOLVED);
     expect(signal?.aborted).toBe(true);
 
     expect(logs).toHaveLength(replies.length + 1);
@@ -378,7 +491,7 @@ describe('approval webhook', () => {
     const { ctx } = fakeContext(clock, {}, () => new Promise(() => {}));
     const { fetchImpl, calls } = fakeFetch(() => json({ outcome: 'happened' }));
     const config: AgentOnceConfig = { ...workspace.config(), approvalWebhook: { url: HOOK_URL, timeoutSeconds: 30, secretEnv: 'AO_SECRET' } };
-    expect(await createHumanResolver(ctx, config, { AO_SECRET: 'from-env' }, { fetchImpl }).resolve(DOUBT)).toBe('happened');
+    expect(await createHumanResolver(ctx, config, { AO_SECRET: 'from-env' }, { fetchImpl }).resolve(DOUBT)).toEqual(byWebhook('happened'));
     const body = String(calls[0]?.init.body);
     expect(new Headers(calls[0]?.init.headers).get('x-agent-once-signature')).toBe(`sha256=${createHmac('sha256', 'from-env').update(body).digest('hex')}`);
   });
@@ -386,17 +499,35 @@ describe('approval webhook', () => {
 
 describe('chain', () => {
   test('returns the first answer that is not unresolved and stops asking', async () => {
-    const first = fixed('unresolved');
-    const second = fixed('not_happened');
-    const third = fixed('happened');
-    expect(await new ChainResolver([first, second, third]).resolve(DOUBT)).toBe('not_happened');
+    const first = fixed(UNRESOLVED);
+    const second = fixed(byWebhook('not_happened'));
+    const third = fixed(byHuman('happened'));
+    expect(await new ChainResolver([first, second, third]).resolve(DOUBT)).toEqual(byWebhook('not_happened'));
     expect([first.asked, second.asked, third.asked]).toEqual([1, 1, 0]);
   });
 
   test('a resolver that throws is skipped and an empty chain is unresolved', async () => {
     const throwing: HumanResolver = { resolve: () => Promise.reject(new Error('boom')) };
-    expect(await new ChainResolver([throwing, fixed('happened')]).resolve(DOUBT)).toBe('happened');
-    expect(await new ChainResolver([]).resolve(DOUBT)).toBe('unresolved');
+    expect(await new ChainResolver([throwing, fixed(byHuman('happened'))]).resolve(DOUBT)).toEqual(byHuman('happened'));
+    expect(await new ChainResolver([]).resolve(DOUBT)).toEqual(UNRESOLVED);
+  });
+
+  test('passes the call signal to each resolver and stops once the call is cancelled', async () => {
+    const controller = new AbortController();
+    const first: HumanResolver = {
+      resolve: async () => {
+        controller.abort();
+        return UNRESOLVED;
+      },
+    };
+    const second = fixed(byWebhook('happened'));
+    expect(await new ChainResolver([first, second]).resolve(DOUBT, controller.signal)).toEqual(UNRESOLVED);
+    expect(second.asked).toBe(0);
+
+    const live = new AbortController();
+    const asked = fixed(byHuman('happened'));
+    await new ChainResolver([asked]).resolve(DOUBT, live.signal);
+    expect(asked.signals).toEqual([live.signal]);
   });
 });
 

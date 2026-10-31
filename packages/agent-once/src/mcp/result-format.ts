@@ -11,7 +11,7 @@ export interface ReplayInfo {
   resultTruncated: boolean;
 }
 
-export function textItem(text: string): CallToolResult['content'][number] {
+function textItem(text: string): CallToolResult['content'][number] {
   return { type: 'text', text };
 }
 

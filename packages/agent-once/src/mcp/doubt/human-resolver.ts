@@ -2,7 +2,7 @@ import type { AgentOnceConfig } from '../../config/schema.js';
 import type { HumanResolver } from '../../guard/types.js';
 import type { ProxyContext } from '../proxy.js';
 import { ChainResolver } from './chain-resolver.js';
-import { ElicitationResolver } from './elicitation-resolver.js';
+import { DEFAULT_ELICITATION_TIMEOUT_MS, ElicitationResolver } from './elicitation-resolver.js';
 import { WebhookResolver } from './webhook-resolver.js';
 
 export interface HumanResolverOptions {
@@ -20,7 +20,7 @@ function webhookSecret(config: AgentOnceConfig, env: NodeJS.ProcessEnv): string 
 
 export function createHumanResolver(ctx: ProxyContext, config: AgentOnceConfig, env: NodeJS.ProcessEnv, options: HumanResolverOptions = {}): HumanResolver {
   const webhook = config.approvalWebhook;
-  if (webhook === undefined) return new ChainResolver([new ElicitationResolver(ctx)]);
+  if (webhook === undefined) return new ChainResolver([new ElicitationResolver(ctx, DEFAULT_ELICITATION_TIMEOUT_MS, options.log)]);
   const secret = webhookSecret(config, env);
   const resolver = new WebhookResolver(
     { url: webhook.url, timeoutSeconds: webhook.timeoutSeconds, ...(secret === undefined ? {} : { secret }) },
@@ -28,5 +28,5 @@ export function createHumanResolver(ctx: ProxyContext, config: AgentOnceConfig, 
     options.fetchImpl,
     options.log,
   );
-  return new ChainResolver([new ElicitationResolver(ctx, webhook.timeoutSeconds * 1000), resolver]);
+  return new ChainResolver([new ElicitationResolver(ctx, webhook.timeoutSeconds * 1000, options.log), resolver]);
 }

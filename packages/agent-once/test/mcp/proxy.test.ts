@@ -371,7 +371,7 @@ describe('doubt delivery seam', () => {
     const humanResolver = (ctx: ProxyContext): HumanResolver => ({
       resolve: async () => {
         seen.push(ctx.clientCapabilities.elicitation);
-        return 'happened';
+        return { outcome: 'happened', by: 'human' };
       },
     });
     const { client } = await startProxy(workspace, { capabilities: { elicitation: {} }, humanResolver });

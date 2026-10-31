@@ -25,12 +25,19 @@ function expectStatus<S extends GuardResult['status']>(result: GuardResult, stat
   return result as GuardResult & { status: S };
 }
 
-function humanAnswering(answer: HumanResolution): { resolve(doubt: DoubtInfo): Promise<HumanResolution>; asked: DoubtInfo[] } {
+function humanAnswering(answer: HumanResolution): {
+  resolve(doubt: DoubtInfo, signal?: AbortSignal): Promise<HumanResolution>;
+  asked: DoubtInfo[];
+  signals: (AbortSignal | undefined)[];
+} {
   const asked: DoubtInfo[] = [];
+  const signals: (AbortSignal | undefined)[] = [];
   return {
     asked,
-    resolve: async (doubt) => {
+    signals,
+    resolve: async (doubt, signal) => {
       asked.push(doubt);
+      signals.push(signal);
       return answer;
     },
   };
@@ -222,7 +229,7 @@ describe('Guard.run', () => {
   });
 
   test('block-on-doubt asks the human resolver and blocks when unresolved', async () => {
-    const human = humanAnswering('unresolved');
+    const human = humanAnswering({ outcome: 'unresolved' });
     const { guard } = setup({ humanResolver: human });
     const call = guardedCall({ policy: 'block-on-doubt', toolClass: 'money' });
     const tool = scripted(TRANSPORT, OK);
@@ -242,7 +249,7 @@ describe('Guard.run', () => {
   });
 
   test('human happened replays and records reconciled by human', async () => {
-    const { ledger, guard } = setup({ humanResolver: humanAnswering('happened') });
+    const { ledger, guard } = setup({ humanResolver: humanAnswering({ outcome: 'happened', by: 'human' }) });
     const call = guardedCall({ policy: 'block-on-doubt', toolClass: 'irreversible' });
     const tool = scripted(TRANSPORT, OK);
     const first = expectStatus(await guard.run(call, tool.execute), 'executed');
@@ -252,8 +259,28 @@ describe('Guard.run', () => {
     expect(tool.calls).toHaveLength(1);
   });
 
+  test('a webhook answer is recorded as resolved by the webhook and the resolver gets the call signal', async () => {
+    const human = humanAnswering({ outcome: 'happened', by: 'webhook' });
+    const { ledger, guard } = setup({ humanResolver: human });
+    const controller = new AbortController();
+    const call = guardedCall({ policy: 'block-on-doubt', toolClass: 'money', signal: controller.signal });
+    const tool = scripted(TRANSPORT, OK);
+    await guard.run(call, tool.execute);
+    expect((await guard.run(call, tool.execute)).status).toBe('replayed');
+    expect(ledger.last().detail).toMatchObject({ outcome: 'happened', resolved_by: 'webhook' });
+    expect(human.signals).toEqual([controller.signal]);
+  });
+
+  test('a malformed human answer blocks', async () => {
+    const { guard } = setup({ humanResolver: { resolve: async () => ({ outcome: 'happened', by: 'agent' }) as unknown as HumanResolution } });
+    const call = guardedCall({ policy: 'block-on-doubt', toolClass: 'money' });
+    const tool = scripted(TRANSPORT, OK);
+    await guard.run(call, tool.execute);
+    expect((await guard.run(call, tool.execute)).status).toBe('blocked');
+  });
+
   test('human not_happened executes the next occurrence', async () => {
-    const { guard } = setup({ humanResolver: humanAnswering('not_happened') });
+    const { guard } = setup({ humanResolver: humanAnswering({ outcome: 'not_happened', by: 'human' }) });
     const call = guardedCall({ policy: 'block-on-doubt', toolClass: 'money' });
     const tool = scripted(TRANSPORT, OK);
     await guard.run(call, tool.execute);
@@ -555,7 +582,7 @@ describe('Guard with two processes on one ledger', () => {
     const waiting = b.run(call, tool.execute);
     expect(a.resolve(first.actionId ?? '', 'happened', 'human').ok).toBe(true);
     clock.advance(200_000);
-    answer.resolve('happened');
+    answer.resolve({ outcome: 'happened', by: 'human' });
     expect((await waiting).status).toBe('replayed');
     expect(tool.calls).toHaveLength(1);
   });

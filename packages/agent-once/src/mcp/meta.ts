@@ -4,6 +4,7 @@ export const INTENT_META_KEY = 'io.github.ajibadedapo/agent-once-intent';
 export const STATUS_META_KEY = 'io.github.ajibadedapo/agent-once';
 export const ACTION_META_KEY = 'io.github.ajibadedapo/agent-once-action';
 export const SESSION_ENV = 'AGENT_ONCE_SESSION';
+export const RESOLVE_TOOL_NAME = 'agent_once_resolve';
 
 export function metaString(meta: Record<string, unknown> | undefined, key: string): string | undefined {
   const value = meta?.[key];

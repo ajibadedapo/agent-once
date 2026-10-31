@@ -1,0 +1,56 @@
+{
+  "name": "agent-once",
+  "version": "0.1.0",
+  "description": "Stop your AI agent from charging, booking or sending twice.",
+  "license": "Apache-2.0",
+  "author": "Hammed Ajibade",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "bin": {
+    "agent-once": "dist/cli/main.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp/index.d.ts",
+      "default": "./dist/mcp/index.js"
+    },
+    "./chaos": {
+      "types": "./dist/chaos/index.d.ts",
+      "default": "./dist/chaos/index.js"
+    },
+    "./claude-agent-sdk": {
+      "types": "./dist/integrations/claude-agent-sdk.d.ts",
+      "default": "./dist/integrations/claude-agent-sdk.js"
+    },
+    "./playwright-mcp": {
+      "types": "./dist/integrations/playwright-mcp.d.ts",
+      "default": "./dist/integrations/playwright-mcp.js"
+    },
+    "./vitest": {
+      "types": "./dist/integrations/vitest.d.ts",
+      "default": "./dist/integrations/vitest.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2"
+  }
+}

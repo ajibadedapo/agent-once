@@ -1,0 +1,237 @@
+[
+  {
+    "name": "key_order_by_utf16_code_units",
+    "input": {"b":1,"a":2,"\u00e9":3,"z":4},
+    "canonical": "{\"a\":2,\"b\":1,\"z\":4,\"\u00e9\":3}"
+  },
+  {
+    "name": "rfc8785_sorting_example",
+    "input": {"\u20ac":"Euro Sign","\r":"Carriage Return","\ufb33":"Hebrew Letter Dalet With Dagesh","1":"One","\ud83d\ude00":"Emoji: Grinning Face","\u0080":"Control","\u00f6":"Latin Small Letter O With Diaeresis"},
+    "canonical": "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\u0080\":\"Control\",\"\u00f6\":\"Latin Small Letter O With Diaeresis\",\"\u20ac\":\"Euro Sign\",\"\ud83d\ude00\":\"Emoji: Grinning Face\",\"\ufb33\":\"Hebrew Letter Dalet With Dagesh\"}"
+  },
+  {
+    "name": "surrogate_pair_key_sorts_before_high_bmp_key",
+    "input": {"\uff61":1,"\ud800\udc00":2},
+    "canonical": "{\"\ud800\udc00\":2,\"\uff61\":1}"
+  },
+  {
+    "name": "rfc8785_main_example",
+    "input": {"numbers":[333333333.33333329,1E30,4.50,2e-3,0.000000000000000000000000001],"string":"\u20ac$\u000F\u000aA'\u0042\u0022\u005c\\\"\/","literals":[null,true,false]},
+    "canonical": "{\"literals\":[null,true,false],\"numbers\":[333333333.3333333,1e+30,4.5,0.002,1e-27],\"string\":\"\u20ac$\\u000f\\nA'B\\\"\\\\\\\\\\\"/\"}"
+  },
+  {
+    "name": "integral_float_drops_fraction",
+    "input": 1.0,
+    "canonical": "1"
+  },
+  {
+    "name": "float_with_trailing_zero",
+    "input": 4.50,
+    "canonical": "4.5"
+  },
+  {
+    "name": "exponent_21_uses_exponent_form",
+    "input": 1e21,
+    "canonical": "1e+21"
+  },
+  {
+    "name": "largest_plain_integer_form",
+    "input": 1e20,
+    "canonical": "100000000000000000000"
+  },
+  {
+    "name": "small_exponent_form",
+    "input": 1e-7,
+    "canonical": "1e-7"
+  },
+  {
+    "name": "smallest_plain_fraction_form",
+    "input": 0.000001,
+    "canonical": "0.000001"
+  },
+  {
+    "name": "one_tenth",
+    "input": 0.1,
+    "canonical": "0.1"
+  },
+  {
+    "name": "float_sum_shortest_round_trip",
+    "input": 0.30000000000000004,
+    "canonical": "0.30000000000000004"
+  },
+  {
+    "name": "negative_zero_is_zero",
+    "input": -0.0,
+    "canonical": "0"
+  },
+  {
+    "name": "negative_integer",
+    "input": -42,
+    "canonical": "-42"
+  },
+  {
+    "name": "rfc8785_number_0000000000000000",
+    "input": 0.0,
+    "canonical": "0"
+  },
+  {
+    "name": "rfc8785_number_8000000000000000",
+    "input": -0.0,
+    "canonical": "0"
+  },
+  {
+    "name": "rfc8785_number_0000000000000001",
+    "input": 5e-324,
+    "canonical": "5e-324"
+  },
+  {
+    "name": "rfc8785_number_8000000000000001",
+    "input": -5e-324,
+    "canonical": "-5e-324"
+  },
+  {
+    "name": "rfc8785_number_7fefffffffffffff",
+    "input": 1.7976931348623157e308,
+    "canonical": "1.7976931348623157e+308"
+  },
+  {
+    "name": "rfc8785_number_ffefffffffffffff",
+    "input": -1.7976931348623157e308,
+    "canonical": "-1.7976931348623157e+308"
+  },
+  {
+    "name": "rfc8785_number_4340000000000000",
+    "input": 9007199254740992,
+    "canonical": "9007199254740992"
+  },
+  {
+    "name": "rfc8785_number_c340000000000000",
+    "input": -9007199254740992,
+    "canonical": "-9007199254740992"
+  },
+  {
+    "name": "rfc8785_number_4430000000000000",
+    "input": 2.9514790517935283e20,
+    "canonical": "295147905179352830000"
+  },
+  {
+    "name": "rfc8785_number_44b52d02c7e14af5",
+    "input": 9.999999999999997e22,
+    "canonical": "9.999999999999997e+22"
+  },
+  {
+    "name": "rfc8785_number_44b52d02c7e14af6",
+    "input": 1e23,
+    "canonical": "1e+23"
+  },
+  {
+    "name": "rfc8785_number_44b52d02c7e14af7",
+    "input": 1.0000000000000001e23,
+    "canonical": "1.0000000000000001e+23"
+  },
+  {
+    "name": "rfc8785_number_444b1ae4d6e2ef4e",
+    "input": 9.999999999999997e20,
+    "canonical": "999999999999999700000"
+  },
+  {
+    "name": "rfc8785_number_444b1ae4d6e2ef4f",
+    "input": 9.999999999999999e20,
+    "canonical": "999999999999999900000"
+  },
+  {
+    "name": "rfc8785_number_444b1ae4d6e2ef50",
+    "input": 1e21,
+    "canonical": "1e+21"
+  },
+  {
+    "name": "rfc8785_number_3eb0c6f7a0b5ed8c",
+    "input": 9.999999999999997e-7,
+    "canonical": "9.999999999999997e-7"
+  },
+  {
+    "name": "rfc8785_number_3eb0c6f7a0b5ed8d",
+    "input": 1e-6,
+    "canonical": "0.000001"
+  },
+  {
+    "name": "rfc8785_number_41b3de4355555553",
+    "input": 333333333.3333332,
+    "canonical": "333333333.3333332"
+  },
+  {
+    "name": "rfc8785_number_41b3de4355555554",
+    "input": 333333333.33333325,
+    "canonical": "333333333.33333325"
+  },
+  {
+    "name": "rfc8785_number_41b3de4355555555",
+    "input": 333333333.3333333,
+    "canonical": "333333333.3333333"
+  },
+  {
+    "name": "rfc8785_number_41b3de4355555556",
+    "input": 333333333.3333334,
+    "canonical": "333333333.3333334"
+  },
+  {
+    "name": "rfc8785_number_41b3de4355555557",
+    "input": 333333333.33333343,
+    "canonical": "333333333.33333343"
+  },
+  {
+    "name": "rfc8785_number_becbf647612f3696",
+    "input": -3.3333333333333333e-6,
+    "canonical": "-0.0000033333333333333333"
+  },
+  {
+    "name": "rfc8785_number_43143ff3c1cb0959",
+    "input": 1424953923781206.2,
+    "canonical": "1424953923781206.2"
+  },
+  {
+    "name": "control_characters_escaped",
+    "input": "\u0000\u0001\b\t\n\u000b\f\r\u001f",
+    "canonical": "\"\\u0000\\u0001\\b\\t\\n\\u000b\\f\\r\\u001f\""
+  },
+  {
+    "name": "quote_backslash_escaped_solidus_literal",
+    "input": "a\"b\\c\/d",
+    "canonical": "\"a\\\"b\\\\c/d\""
+  },
+  {
+    "name": "non_ascii_and_separators_stay_literal",
+    "input": "caf\u00e9 \u20ac \ud83d\ude00 \u007f \u2028 \u2029",
+    "canonical": "\"caf\u00e9 \u20ac \ud83d\ude00 \u007f \u2028 \u2029\""
+  },
+  {
+    "name": "space_stays_literal",
+    "input": " a b ",
+    "canonical": "\" a b \""
+  },
+  {
+    "name": "nested_arrays_and_objects",
+    "input": [[1,[2.0,[3,{"b":[],"a":{}}]]],[],[[[]]],{"k":[{"z":null,"y":[true,false]}]}],
+    "canonical": "[[1,[2,[3,{\"a\":{},\"b\":[]}]]],[],[[[]]],{\"k\":[{\"y\":[true,false],\"z\":null}]}]"
+  },
+  {
+    "name": "top_level_literals",
+    "input": [null,true,false,"",{},[]],
+    "canonical": "[null,true,false,\"\",{},[]]"
+  },
+  {
+    "name": "nan_in_object",
+    "input": {"price":{"$number":"NaN"}},
+    "error": "non_finite"
+  },
+  {
+    "name": "infinity_nested_in_array",
+    "input": {"items":[1,[{"qty":{"$number":"Infinity"}}]]},
+    "error": "non_finite"
+  },
+  {
+    "name": "negative_infinity_top_level",
+    "input": {"$number":"-Infinity"},
+    "error": "non_finite"
+  }
+]

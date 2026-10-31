@@ -1,0 +1,1059 @@
+[
+  {
+    "name": "no_previous_event_executes_occurrence_0",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": null,
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "execute",
+      "occurrence": 0,
+      "reason": "new"
+    }
+  },
+  {
+    "name": "expired_confirmed_executes_next_occurrence",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "confirmed",
+      "occurrence": 2,
+      "at_ms": 1761825940678,
+      "expires_at_ms": 1761912340678,
+      "run_instance": "run-a",
+      "detail": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "order 1001 placed"
+            }
+          ]
+        },
+        "result_truncated": false,
+        "delivery": "delivered"
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": true,
+      "intent_key_explicit": true,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "execute",
+      "occurrence": 3,
+      "reason": "expired"
+    }
+  },
+  {
+    "name": "expired_sent_executes_next_occurrence",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "sent",
+      "occurrence": 0,
+      "at_ms": 1761825945677,
+      "expires_at_ms": 1761912345677,
+      "run_instance": "run-a",
+      "detail": {}
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "block-on-doubt"
+    },
+    "expect": {
+      "kind": "execute",
+      "occurrence": 1,
+      "reason": "expired"
+    }
+  },
+  {
+    "name": "boundary_exactly_at_expiry_is_expired",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "sent",
+      "occurrence": 1,
+      "at_ms": 1761825945678,
+      "expires_at_ms": 1761912345678,
+      "run_instance": "run-a",
+      "detail": {}
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "execute",
+      "occurrence": 2,
+      "reason": "expired"
+    }
+  },
+  {
+    "name": "boundary_one_ms_before_expiry_is_not_expired",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "sent",
+      "occurrence": 1,
+      "at_ms": 1761825945679,
+      "expires_at_ms": 1761912345679,
+      "run_instance": "run-a",
+      "detail": {}
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "in_doubt",
+      "occurrence": 1,
+      "reason": "outcome_unknown"
+    }
+  },
+  {
+    "name": "intended_is_in_doubt",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "intended",
+      "occurrence": 0,
+      "at_ms": 1761912345428,
+      "expires_at_ms": 1761998745428,
+      "run_instance": "run-a",
+      "detail": {}
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "in_doubt",
+      "occurrence": 0,
+      "reason": "outcome_unknown"
+    }
+  },
+  {
+    "name": "sent_is_in_doubt",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "sent",
+      "occurrence": 0,
+      "at_ms": 1761912345478,
+      "expires_at_ms": 1761998745478,
+      "run_instance": "run-a",
+      "detail": {
+        "captured": "ORD-1001"
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "in_doubt",
+      "occurrence": 0,
+      "reason": "outcome_unknown"
+    }
+  },
+  {
+    "name": "sent_long_ago_from_another_run_is_still_in_doubt",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "sent",
+      "occurrence": 4,
+      "at_ms": 1761908745678,
+      "expires_at_ms": 1761995145678,
+      "run_instance": "run-b",
+      "detail": {}
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": true,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "in_doubt",
+      "occurrence": 4,
+      "reason": "outcome_unknown"
+    }
+  },
+  {
+    "name": "sent_with_block_on_doubt_is_in_doubt",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "sent",
+      "occurrence": 0,
+      "at_ms": 1761912345478,
+      "expires_at_ms": 1761998745478,
+      "run_instance": "run-a",
+      "detail": {}
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "block-on-doubt"
+    },
+    "expect": {
+      "kind": "in_doubt",
+      "occurrence": 0,
+      "reason": "outcome_unknown"
+    }
+  },
+  {
+    "name": "failed_not_dispatched_executes_next_at_once",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "failed",
+      "occurrence": 0,
+      "at_ms": 1761912345668,
+      "expires_at_ms": 1761998745668,
+      "run_instance": "run-a",
+      "detail": {
+        "failure_kind": "not_dispatched",
+        "error": "stale element ref",
+        "result": null
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "execute",
+      "occurrence": 1,
+      "reason": "not_dispatched"
+    }
+  },
+  {
+    "name": "failed_not_dispatched_executes_next_even_with_block_on_doubt",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "failed",
+      "occurrence": 2,
+      "at_ms": 1761912345668,
+      "expires_at_ms": 1761998745668,
+      "run_instance": "run-a",
+      "detail": {
+        "failure_kind": "not_dispatched",
+        "error": "stale element ref",
+        "result": null
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "block-on-doubt"
+    },
+    "expect": {
+      "kind": "execute",
+      "occurrence": 3,
+      "reason": "not_dispatched"
+    }
+  },
+  {
+    "name": "failed_with_block_on_doubt_is_in_doubt_after_window",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "failed",
+      "occurrence": 0,
+      "at_ms": 1761911985678,
+      "expires_at_ms": 1761998385678,
+      "run_instance": "run-a",
+      "detail": {
+        "failure_kind": "transport_error",
+        "error": "upstream closed the connection",
+        "result": null
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "block-on-doubt"
+    },
+    "expect": {
+      "kind": "in_doubt",
+      "occurrence": 0,
+      "reason": "failed_block_on_doubt"
+    }
+  },
+  {
+    "name": "failed_with_block_on_doubt_is_in_doubt_within_window",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "failed",
+      "occurrence": 0,
+      "at_ms": 1761912344678,
+      "expires_at_ms": 1761998744678,
+      "run_instance": "run-a",
+      "detail": {
+        "failure_kind": "error_result",
+        "error": "gateway timeout",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "504"
+            }
+          ],
+          "isError": true
+        }
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "block-on-doubt"
+    },
+    "expect": {
+      "kind": "in_doubt",
+      "occurrence": 0,
+      "reason": "failed_block_on_doubt"
+    }
+  },
+  {
+    "name": "failed_transport_error_within_window_is_in_doubt",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "failed",
+      "occurrence": 0,
+      "at_ms": 1761912343678,
+      "expires_at_ms": 1761998743678,
+      "run_instance": "run-a",
+      "detail": {
+        "failure_kind": "transport_error",
+        "error": "upstream closed the connection",
+        "result": null
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "in_doubt",
+      "occurrence": 0,
+      "reason": "failed_within_window"
+    }
+  },
+  {
+    "name": "boundary_failed_one_ms_before_window_end_is_in_doubt",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "failed",
+      "occurrence": 1,
+      "at_ms": 1761912225679,
+      "expires_at_ms": 1761998625679,
+      "run_instance": "run-a",
+      "detail": {
+        "failure_kind": "error_result",
+        "error": "gateway timeout",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "504"
+            }
+          ],
+          "isError": true
+        }
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "in_doubt",
+      "occurrence": 1,
+      "reason": "failed_within_window"
+    }
+  },
+  {
+    "name": "boundary_failed_exactly_at_window_end_is_outside_window",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "failed",
+      "occurrence": 1,
+      "at_ms": 1761912225678,
+      "expires_at_ms": 1761998625678,
+      "run_instance": "run-a",
+      "detail": {
+        "failure_kind": "error_result",
+        "error": "gateway timeout",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "504"
+            }
+          ],
+          "isError": true
+        }
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "execute",
+      "occurrence": 2,
+      "reason": "failed_after_window"
+    }
+  },
+  {
+    "name": "failed_after_window_executes_next",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "failed",
+      "occurrence": 0,
+      "at_ms": 1761911745678,
+      "expires_at_ms": 1761998145678,
+      "run_instance": "run-b",
+      "detail": {
+        "failure_kind": "transport_error",
+        "error": "upstream closed the connection",
+        "result": null
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": true,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "execute",
+      "occurrence": 1,
+      "reason": "failed_after_window"
+    }
+  },
+  {
+    "name": "confirmed_with_explicit_intent_key_replays",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "confirmed",
+      "occurrence": 0,
+      "at_ms": 1761908745678,
+      "expires_at_ms": 1761995145678,
+      "run_instance": "run-a",
+      "detail": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "order 1001 placed"
+            }
+          ]
+        },
+        "result_truncated": false,
+        "delivery": "delivered"
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": true,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "replay",
+      "occurrence": 0,
+      "reason": "replay_explicit_intent"
+    }
+  },
+  {
+    "name": "reconciled_happened_with_explicit_intent_key_replays",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "reconciled",
+      "occurrence": 1,
+      "at_ms": 1761908745678,
+      "expires_at_ms": 1761995145678,
+      "run_instance": "run-a",
+      "detail": {
+        "outcome": "happened",
+        "resolved_by": "reconciler",
+        "result": null
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": true,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "replay",
+      "occurrence": 1,
+      "reason": "replay_explicit_intent"
+    }
+  },
+  {
+    "name": "explicit_intent_key_wins_over_undelivered",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "confirmed",
+      "occurrence": 0,
+      "at_ms": 1761912345578,
+      "expires_at_ms": 1761998745578,
+      "run_instance": "run-a",
+      "detail": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "order 1001 placed"
+            }
+          ]
+        },
+        "result_truncated": false,
+        "delivery": "cancelled"
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": true,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "replay",
+      "occurrence": 0,
+      "reason": "replay_explicit_intent"
+    }
+  },
+  {
+    "name": "confirmed_cancelled_delivery_within_window_replays",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "confirmed",
+      "occurrence": 0,
+      "at_ms": 1761912340678,
+      "expires_at_ms": 1761998740678,
+      "run_instance": "run-a",
+      "detail": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "order 1001 placed"
+            }
+          ]
+        },
+        "result_truncated": false,
+        "delivery": "cancelled"
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "replay",
+      "occurrence": 0,
+      "reason": "replay_undelivered"
+    }
+  },
+  {
+    "name": "boundary_cancelled_delivery_one_ms_before_window_end_replays",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "confirmed",
+      "occurrence": 0,
+      "at_ms": 1761912225679,
+      "expires_at_ms": 1761998625679,
+      "run_instance": "run-a",
+      "detail": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "order 1001 placed"
+            }
+          ]
+        },
+        "result_truncated": false,
+        "delivery": "cancelled"
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "replay",
+      "occurrence": 0,
+      "reason": "replay_undelivered"
+    }
+  },
+  {
+    "name": "boundary_cancelled_delivery_exactly_at_window_end_is_a_deliberate_repeat",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "confirmed",
+      "occurrence": 0,
+      "at_ms": 1761912225678,
+      "expires_at_ms": 1761998625678,
+      "run_instance": "run-a",
+      "detail": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "order 1001 placed"
+            }
+          ]
+        },
+        "result_truncated": false,
+        "delivery": "cancelled"
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "execute",
+      "occurrence": 1,
+      "reason": "deliberate_repeat"
+    }
+  },
+  {
+    "name": "reconciled_happened_within_window_replays_as_undelivered",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "reconciled",
+      "occurrence": 0,
+      "at_ms": 1761912315678,
+      "expires_at_ms": 1761998715678,
+      "run_instance": "run-a",
+      "detail": {
+        "outcome": "happened",
+        "resolved_by": "human",
+        "result": null
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "replay",
+      "occurrence": 0,
+      "reason": "replay_undelivered"
+    }
+  },
+  {
+    "name": "reconciled_happened_after_window_same_run_is_a_deliberate_repeat",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "reconciled",
+      "occurrence": 0,
+      "at_ms": 1761911985678,
+      "expires_at_ms": 1761998385678,
+      "run_instance": "run-a",
+      "detail": {
+        "outcome": "happened",
+        "resolved_by": "agent",
+        "result": null
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "execute",
+      "occurrence": 1,
+      "reason": "deliberate_repeat"
+    }
+  },
+  {
+    "name": "confirmed_from_another_run_with_explicit_session_replays_after_window",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "confirmed",
+      "occurrence": 0,
+      "at_ms": 1761908745678,
+      "expires_at_ms": 1761995145678,
+      "run_instance": "run-b",
+      "detail": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "order 1001 placed"
+            }
+          ]
+        },
+        "result_truncated": false,
+        "delivery": "delivered"
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": true,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "replay",
+      "occurrence": 0,
+      "reason": "replay_rerun_explicit_session"
+    }
+  },
+  {
+    "name": "reconciled_happened_from_another_run_with_explicit_session_replays",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "reconciled",
+      "occurrence": 2,
+      "at_ms": 1761908745678,
+      "expires_at_ms": 1761995145678,
+      "run_instance": "run-b",
+      "detail": {
+        "outcome": "happened",
+        "resolved_by": "webhook",
+        "result": null
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": true,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "replay",
+      "occurrence": 2,
+      "reason": "replay_rerun_explicit_session"
+    }
+  },
+  {
+    "name": "confirmed_from_another_run_default_session_within_window_replays",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "confirmed",
+      "occurrence": 0,
+      "at_ms": 1761912285678,
+      "expires_at_ms": 1761998685678,
+      "run_instance": "run-b",
+      "detail": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "order 1001 placed"
+            }
+          ]
+        },
+        "result_truncated": false,
+        "delivery": "delivered"
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "replay",
+      "occurrence": 0,
+      "reason": "replay_rerun_within_window"
+    }
+  },
+  {
+    "name": "boundary_another_run_default_session_one_ms_before_window_end_replays",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "confirmed",
+      "occurrence": 0,
+      "at_ms": 1761912225679,
+      "expires_at_ms": 1761998625679,
+      "run_instance": "run-b",
+      "detail": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "order 1001 placed"
+            }
+          ]
+        },
+        "result_truncated": false,
+        "delivery": "delivered"
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "replay",
+      "occurrence": 0,
+      "reason": "replay_rerun_within_window"
+    }
+  },
+  {
+    "name": "boundary_another_run_default_session_exactly_at_window_end_is_a_deliberate_repeat",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "confirmed",
+      "occurrence": 0,
+      "at_ms": 1761912225678,
+      "expires_at_ms": 1761998625678,
+      "run_instance": "run-b",
+      "detail": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "order 1001 placed"
+            }
+          ]
+        },
+        "result_truncated": false,
+        "delivery": "delivered"
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "execute",
+      "occurrence": 1,
+      "reason": "deliberate_repeat"
+    }
+  },
+  {
+    "name": "confirmed_delivered_same_run_within_window_is_a_deliberate_repeat",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "confirmed",
+      "occurrence": 0,
+      "at_ms": 1761912344678,
+      "expires_at_ms": 1761998744678,
+      "run_instance": "run-a",
+      "detail": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "order 1001 placed"
+            }
+          ]
+        },
+        "result_truncated": false,
+        "delivery": "delivered"
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "execute",
+      "occurrence": 1,
+      "reason": "deliberate_repeat"
+    }
+  },
+  {
+    "name": "confirmed_delivered_same_run_explicit_session_is_a_deliberate_repeat",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "confirmed",
+      "occurrence": 3,
+      "at_ms": 1761912344678,
+      "expires_at_ms": 1761998744678,
+      "run_instance": "run-a",
+      "detail": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "order 1001 placed"
+            }
+          ]
+        },
+        "result_truncated": false,
+        "delivery": "delivered"
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": true,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "execute",
+      "occurrence": 4,
+      "reason": "deliberate_repeat"
+    }
+  },
+  {
+    "name": "reconciled_not_happened_executes_next",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "reconciled",
+      "occurrence": 0,
+      "at_ms": 1761912330678,
+      "expires_at_ms": 1761998730678,
+      "run_instance": "run-a",
+      "detail": {
+        "outcome": "not_happened",
+        "resolved_by": "reconciler",
+        "result": null
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": false,
+      "intent_key_explicit": false,
+      "policy": "guard"
+    },
+    "expect": {
+      "kind": "execute",
+      "occurrence": 1,
+      "reason": "reconciled_not_happened"
+    }
+  },
+  {
+    "name": "reconciled_not_happened_executes_next_even_with_explicit_intent_and_block_on_doubt",
+    "now_ms": 1761912345678,
+    "retry_window_ms": 120000,
+    "expiry_ms": 86400000,
+    "latest": {
+      "state": "reconciled",
+      "occurrence": 1,
+      "at_ms": 1761912330678,
+      "expires_at_ms": 1761998730678,
+      "run_instance": "run-b",
+      "detail": {
+        "outcome": "not_happened",
+        "resolved_by": "human",
+        "result": null
+      }
+    },
+    "call": {
+      "run_instance": "run-a",
+      "session_explicit": true,
+      "intent_key_explicit": true,
+      "policy": "block-on-doubt"
+    },
+    "expect": {
+      "kind": "execute",
+      "occurrence": 2,
+      "reason": "reconciled_not_happened"
+    }
+  }
+]

@@ -1,0 +1,308 @@
+[
+  {
+    "name": "plain_args_occurrence_0",
+    "session_key": "claude-code:/work/shop",
+    "tool": "place_order",
+    "args": {
+      "sku": "A-100",
+      "qty": 2,
+      "gift": false,
+      "note": null
+    },
+    "projected": {
+      "sku": "A-100",
+      "qty": 2,
+      "gift": false,
+      "note": null
+    },
+    "intent_hash": "5cfd75d36d4feb18193c49529d6b4b466e815fa76847bffb79378657f3d31b1d",
+    "occurrence": 0,
+    "action_id": "ao_d8d90ae0110e53cc478fb375"
+  },
+  {
+    "name": "key_order_and_top_level_volatile_keys_do_not_change_intent_occurrence_3",
+    "session_key": "claude-code:/work/shop",
+    "tool": "place_order",
+    "args": {
+      "timestamp": 1761912345678,
+      "qty": 2,
+      "note": null,
+      "sku": "A-100",
+      "gift": false,
+      "request_id": "req-7"
+    },
+    "projected": {
+      "qty": 2,
+      "note": null,
+      "sku": "A-100",
+      "gift": false
+    },
+    "intent_hash": "5cfd75d36d4feb18193c49529d6b4b466e815fa76847bffb79378657f3d31b1d",
+    "occurrence": 3,
+    "action_id": "ao_b45ca7cc51c496f2aa8295af"
+  },
+  {
+    "name": "volatile_keys_removed_at_any_depth",
+    "session_key": "claude-code:/work/shop",
+    "tool": "create_invoice",
+    "args": {
+      "customer": {
+        "id": "c-9",
+        "trace_id": "abc",
+        "address": {
+          "city": "Leeds",
+          "ts": 5
+        }
+      },
+      "lines": [
+        {
+          "sku": "A",
+          "qty": 1,
+          "nonce": "n-1"
+        },
+        {
+          "sku": "B",
+          "qty": 2,
+          "meta": {
+            "traceId": "t-2",
+            "keep": true
+          }
+        }
+      ],
+      "_meta": {
+        "progressToken": 4
+      },
+      "idempotencyKey": "k-1",
+      "idempotency_key": "k-2",
+      "requestId": "r-3"
+    },
+    "projected": {
+      "customer": {
+        "id": "c-9",
+        "address": {
+          "city": "Leeds"
+        }
+      },
+      "lines": [
+        {
+          "sku": "A",
+          "qty": 1
+        },
+        {
+          "sku": "B",
+          "qty": 2,
+          "meta": {
+            "keep": true
+          }
+        }
+      ]
+    },
+    "intent_hash": "b1e51cee7938a8003670a1ce727d4aef0c2846be2efe8a473b2f635d1168f700",
+    "occurrence": 0,
+    "action_id": "ao_531af37f3d660bf78546a1a1"
+  },
+  {
+    "name": "volatile_key_match_is_case_sensitive",
+    "session_key": "claude-code:/work/shop",
+    "tool": "send_email",
+    "args": {
+      "Timestamp": "kept",
+      "TS": 1,
+      "to": "a@example.com",
+      "ts": 2
+    },
+    "projected": {
+      "Timestamp": "kept",
+      "TS": 1,
+      "to": "a@example.com"
+    },
+    "intent_hash": "677f81d0eb3983926ba331adf7aa2025ba1c7d333c8ec37b25ec5c63e16bc96e",
+    "occurrence": 0,
+    "action_id": "ao_2d7f2573553759f72dbc3458"
+  },
+  {
+    "name": "include_rule_keeps_only_listed_top_level_keys",
+    "session_key": "claude-code:/work/shop",
+    "tool": "book_slot",
+    "args": {
+      "slot": "2026-11-02T10:00",
+      "venue": "court-3",
+      "comment": "see you there",
+      "client_ref": 991,
+      "nonce": "x"
+    },
+    "identity_rule": {
+      "include": [
+        "slot",
+        "venue",
+        "missing_key"
+      ]
+    },
+    "projected": {
+      "slot": "2026-11-02T10:00",
+      "venue": "court-3"
+    },
+    "intent_hash": "dce7e490d5056b60ea8189c36afeeac3eaf3d4ab7f860389cba6a803ff673240",
+    "occurrence": 0,
+    "action_id": "ao_367f9534de09ef8faf1ff3cd"
+  },
+  {
+    "name": "exclude_rule_drops_listed_top_level_keys_only",
+    "session_key": "claude-code:/work/shop",
+    "tool": "send_email",
+    "args": {
+      "to": "a@example.com",
+      "subject": "Receipt",
+      "body": "Thanks",
+      "draft_id": "d-1",
+      "headers": {
+        "draft_id": "nested stays"
+      }
+    },
+    "identity_rule": {
+      "exclude": [
+        "draft_id",
+        "body"
+      ]
+    },
+    "projected": {
+      "to": "a@example.com",
+      "subject": "Receipt",
+      "headers": {
+        "draft_id": "nested stays"
+      }
+    },
+    "intent_hash": "fc3cd435729db2923c808bb126895a7ced03f08c1f5b4aa4157b2fd8f9bad1a2",
+    "occurrence": 0,
+    "action_id": "ao_653989a6e906ca78893cd74c"
+  },
+  {
+    "name": "explicit_intent_key_ignores_args",
+    "session_key": "claude-code:/work/shop",
+    "tool": "place_order",
+    "args": {
+      "sku": "A-100",
+      "qty": 5
+    },
+    "intent_key": "cart-42-checkout",
+    "projected": {
+      "sku": "A-100",
+      "qty": 5
+    },
+    "intent_hash": "dfcef89bea5e2ac6b1c3c7bea7f9de7863e9db70c62bd3455f4171a3e87a8c5d",
+    "occurrence": 0,
+    "action_id": "ao_a9e68ed43ecdd4e3aeb795b5"
+  },
+  {
+    "name": "explicit_intent_key_same_key_different_args_occurrence_3",
+    "session_key": "claude-code:/work/shop",
+    "tool": "place_order",
+    "args": {
+      "sku": "B-200",
+      "qty": 1
+    },
+    "intent_key": "cart-42-checkout",
+    "projected": {
+      "sku": "B-200",
+      "qty": 1
+    },
+    "intent_hash": "dfcef89bea5e2ac6b1c3c7bea7f9de7863e9db70c62bd3455f4171a3e87a8c5d",
+    "occurrence": 3,
+    "action_id": "ao_316ae5ae0519641bc100d136"
+  },
+  {
+    "name": "browser_page_url_drops_query_and_fragment_and_element_refs",
+    "session_key": "playwright:/work/shop",
+    "tool": "browser_click",
+    "args": {
+      "element": "Place order button",
+      "ref": "e123",
+      "target": "e123"
+    },
+    "browser": {
+      "page_url": "https://shop.example.com/checkout/review?step=2&session=abc#summary",
+      "label": "Place order"
+    },
+    "projected": {
+      "element": "Place order button",
+      "page_url": "https://shop.example.com/checkout/review",
+      "label": "Place order"
+    },
+    "intent_hash": "de802e9d46ed87bff4c1a9fcf7fa491a674bf1c17cd088c2e4bab37ed81f2592",
+    "occurrence": 0,
+    "action_id": "ao_a572e5de3ca683da77bc9788"
+  },
+  {
+    "name": "browser_uid_args_with_explicit_port_and_default_port_removed",
+    "session_key": "chrome-devtools:/work/shop",
+    "tool": "click",
+    "args": {
+      "uid": "1_42",
+      "includeSnapshot": true,
+      "dblClick": false
+    },
+    "browser": {
+      "page_url": "https://pay.example.com:443/confirm?token=t-1",
+      "label": "Pay now"
+    },
+    "projected": {
+      "dblClick": false,
+      "page_url": "https://pay.example.com/confirm",
+      "label": "Pay now"
+    },
+    "intent_hash": "1df9bc0536713935fa5cea868ecc3b0a18e9a1720ad2d7df74362bbe23e9cd7a",
+    "occurrence": 1,
+    "action_id": "ao_5c4799f7b47cae15cc9f6d61"
+  },
+  {
+    "name": "browser_non_default_port_kept_and_page_args_overridden",
+    "session_key": "chrome-devtools:/work/shop",
+    "tool": "type_text",
+    "args": {
+      "text": "4 Main Street",
+      "submitKey": "Enter",
+      "uid": "3_7",
+      "page_url": "spoofed",
+      "label": "spoofed"
+    },
+    "browser": {
+      "page_url": "http://localhost:8080/orders/new?x=1",
+      "label": "Delivery address"
+    },
+    "projected": {
+      "text": "4 Main Street",
+      "submitKey": "Enter",
+      "page_url": "http://localhost:8080/orders/new",
+      "label": "Delivery address"
+    },
+    "intent_hash": "c56f1a0f77225db6750f22d957e5e8d31011af2b7c6eab7b2cdb1f54c648fee1",
+    "occurrence": 0,
+    "action_id": "ao_865239934590d4966b502b37"
+  },
+  {
+    "name": "empty_args",
+    "session_key": "env:nightly-run",
+    "tool": "publish_post",
+    "args": {},
+    "projected": {},
+    "intent_hash": "5cf4724abf9486ee4742df6b897afdada268464e3753ac3bf606b8271cdf8e28",
+    "occurrence": 0,
+    "action_id": "ao_600a969d26ee253e39f0ecd6"
+  },
+  {
+    "name": "non_ascii_string_values",
+    "session_key": "claude-code:/work/shop",
+    "tool": "send_message",
+    "args": {
+      "text": "caf\u00e9 \u2615 \u00fc\u00df",
+      "channel": "general"
+    },
+    "projected": {
+      "text": "caf\u00e9 \u2615 \u00fc\u00df",
+      "channel": "general"
+    },
+    "intent_hash": "79ee1e7758ef9a8ca1c64a5482d5852c18d04e9d33246981f8df4d171d827bb1",
+    "occurrence": 2,
+    "action_id": "ao_ce53b2b11aa5d8bf40700f87"
+  }
+]

@@ -1,0 +1,24 @@
+{
+  "name": "agent-once-workspace",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "bench"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "check:style": "node scripts/check-style.mjs && uv run --project python python scripts/check_style.py",
+    "test": "node --test scripts/check-style.test.mjs scripts/spec-vectors.test.mjs && uv run --project python python scripts/check_style.py --self-test && uv run --project python python scripts/gen_identity_vectors.py --check && npm test --workspace agent-once && uv run --project python pytest python/tests",
+    "build": "npm run build --workspace agent-once",
+    "typecheck": "npm run typecheck --workspace agent-once"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "fast-check": "4.10.2",
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
+  }
+}

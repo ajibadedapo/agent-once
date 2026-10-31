@@ -3,6 +3,7 @@ import { isPlainObject, type JsonValue } from '../canonical/jcs.js';
 export interface TemplateVars {
   args: Record<string, unknown>;
   actionId: string;
+  idempotencyKey?: string;
   captured?: string;
   origin?: string;
 }
@@ -31,10 +32,11 @@ function lookupArg(args: Record<string, unknown>, path: string, name: string): u
 
 function lookup(name: string, vars: TemplateVars): unknown {
   if (name === 'action_id') return vars.actionId;
+  if (name === 'idempotency_key') return vars.idempotencyKey ?? missing(name);
   if (name === 'captured') return vars.captured ?? missing(name);
   if (name === 'origin') return vars.origin ?? missing(name);
   if (name.startsWith('args.')) return lookupArg(vars.args, name.slice('args.'.length), name);
-  throw new TemplateError(`read-back template: unknown placeholder {{${name}}}; use args.<path>, action_id, captured or origin`);
+  throw new TemplateError(`read-back template: unknown placeholder {{${name}}}; use args.<path>, action_id, idempotency_key, captured or origin`);
 }
 
 function asText(value: unknown): string {

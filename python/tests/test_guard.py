@@ -119,7 +119,7 @@ def test_records_the_captured_value_on_intended_and_sent() -> None:
     result = s.guard.run(guarded_call(captured="ORD-1001"), Scripted(OK).execute)
     assert [event.detail for event in s.ledger.appended[:2]] == [
         {"captured": "ORD-1001", "idempotency_key": result.action_id},
-        {"captured": "ORD-1001"},
+        {"captured": "ORD-1001", "idempotency_key": result.action_id},
     ]
 
 
@@ -691,6 +691,19 @@ def test_a_late_retry_the_reconciler_cannot_settle_reuses_the_idempotency_key() 
     reconciler = reconciler_returning(ReconcileOutcome.unknown("no status endpoint"))
     s.guard.run(guarded_call(reconciler=reconciler), tool.execute)
     assert tool.keys == [first.action_id] * 2
+
+
+def test_the_sent_event_of_a_late_retry_repeats_the_inherited_key() -> None:
+    s = setup()
+    tool = Scripted(TRANSPORT, OK)
+    first = s.guard.run(guarded_call(), tool.execute)
+    s.clock.advance(120_000)
+    reconciler = reconciler_returning(ReconcileOutcome.unknown("no status endpoint"))
+    s.guard.run(guarded_call(reconciler=reconciler), tool.execute)
+    sent = [event for event in s.ledger.appended if event.state == "sent" and event.occurrence == 1]
+    assert len(sent) == 1
+    assert sent[0].action_id != first.action_id
+    assert sent[0].detail == {"idempotency_key": first.action_id}
 
 
 def test_a_deliberate_repeat_and_a_reconciled_not_happened_get_fresh_keys() -> None:

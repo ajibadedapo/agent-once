@@ -124,6 +124,22 @@ describe('ReadBackReconciler', () => {
     expect(await reconciler.reconcile(reconcileContext({ ticket: { title: 'Printer on fire' }, limit: 5 }))).toEqual({ outcome: 'happened' });
     expect(upstream.calls[0]?.args).toEqual({ title: 'Printer on fire', limit: 5, note: 'by ao_0123456789abcdef01234567' });
   });
+
+  test('the idempotency key the proxy forwarded fills templates, falling back to the action id', async () => {
+    const inherited = 'ao_fedcba9876543210fedcba98';
+    const listing = { content: [{ type: 'text' as const, text: `[{"id":"ORD-1","clientRef":"${inherited}"}]` }] };
+    const rule: ReadBackRule = {
+      steps: [{ tool: 'list_orders', args: { ref: '{{idempotency_key}}' } }],
+      happened: '"clientRef":"{{idempotency_key}}"',
+      notHappened: '^\\[',
+    };
+    const upstream = new FakeUpstream({ list_orders: listing });
+    const reconciler = new ReadBackReconciler(rule, upstream, {});
+    expect(await reconciler.reconcile(reconcileContext({}, { idempotency_key: inherited }))).toEqual({ outcome: 'happened' });
+    expect(upstream.calls[0]?.args).toEqual({ ref: inherited });
+    expect(await reconciler.reconcile(reconcileContext({}))).toEqual({ outcome: 'not_happened' });
+    expect(upstream.calls[1]?.args).toEqual({ ref: 'ao_0123456789abcdef01234567' });
+  });
 });
 
 describe('templates', () => {
@@ -133,5 +149,10 @@ describe('templates', () => {
     expect(renderPattern('^{{captured}} and {{args.a.b}}$', vars)).toBe('^C\\+1 and x\\(y\\)$');
     expect(() => renderArgs('{{args.missing}}', vars)).toThrow(TemplateError);
     expect(() => renderArgs('{{unknown}}', vars)).toThrow(TemplateError);
+  });
+
+  test('render the idempotency key and refuse it when it is absent', () => {
+    expect(renderPattern('"clientRef":"{{idempotency_key}}"', { args: {}, actionId: 'ao_1', idempotencyKey: 'ao_0.1' })).toBe('"clientRef":"ao_0\\.1"');
+    expect(() => renderPattern('{{idempotency_key}}', { args: {}, actionId: 'ao_1' })).toThrow('no value for {{idempotency_key}}');
   });
 });

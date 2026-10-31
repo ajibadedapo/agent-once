@@ -557,14 +557,16 @@ class Guard:
     def _dispatch(
         self, call: GuardedCall, intended: LedgerEvent
     ) -> Generator[_Effect, object, GuardResult | None]:
+        key = _idempotency_key_of(intended)
         try:
-            sent = self._append_if_latest(intended, "sent", _captured_detail(call))
+            sent = self._append_if_latest(
+                intended, "sent", {**_captured_detail(call), "idempotency_key": key}
+            )
         except LedgerUnavailableError as error:
             return _unavailable(error)
         if sent is None:
             return None
         self._emit_state(sent)
-        key = _idempotency_key_of(intended)
         outcome = _checked_outcome((yield _Dispatch(ExecuteContext(intended.action_id, key))))
         recorded = self._record_outcome(call, sent, key, outcome)
         return GuardResult(

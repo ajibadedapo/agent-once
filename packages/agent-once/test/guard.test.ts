@@ -78,7 +78,7 @@ describe('Guard.run', () => {
     const result = expectStatus(await guard.run(guardedCall({ captured: 'ORD-1001' }), scripted(OK).execute), 'executed');
     expect(ledger.appended.slice(0, 2).map((event) => event.detail)).toEqual([
       { captured: 'ORD-1001', idempotency_key: result.actionId ?? '' },
-      { captured: 'ORD-1001' },
+      { captured: 'ORD-1001', idempotency_key: result.actionId ?? '' },
     ]);
   });
 
@@ -713,6 +713,26 @@ describe('Guard review fixes', () => {
     await guard.run(guardedCall(), tool.execute);
     expect(new Set(tool.calls).size).toBe(3);
     expect(tool.keys).toEqual([first.actionId, first.actionId, first.actionId]);
+  });
+
+  test('the sent event of a late retry repeats the inherited idempotency key for a later reconciler', async () => {
+    const { clock, ledger, guard } = setup();
+    const first = expectStatus(await guard.run(guardedCall(), scripted(TRANSPORT).execute), 'executed');
+    clock.advance(120_000);
+    const reconciler = async () => ({ outcome: 'unknown', reason: 'no status endpoint' }) as const;
+    const hanging = deferred<{ kind: 'abandoned' }>();
+    const dispatched = deferred<undefined>();
+    const retry = guard.run(guardedCall({ reconciler }), () => {
+      dispatched.resolve(undefined);
+      return hanging.promise;
+    });
+    await dispatched.promise;
+    const sent = ledger.last();
+    expect(sent.occurrence).toBe(1);
+    expect(sent.actionId).not.toBe(first.actionId);
+    expect(sent.detail).toEqual({ idempotency_key: first.actionId ?? '' });
+    hanging.resolve({ kind: 'abandoned' });
+    await retry;
   });
 
   test('a retry after not_dispatched reuses the idempotency key', async () => {

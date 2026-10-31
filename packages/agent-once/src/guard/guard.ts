@@ -365,7 +365,7 @@ export class Guard {
   private async dispatch(call: ProtectedCall, intended: LedgerEvent, execute: Execute): Promise<Step> {
     let sent: LedgerEvent | typeof DECIDE_AGAIN;
     try {
-      sent = this.appendIfLatest(intended, 'sent', capturedDetail(call));
+      sent = this.appendIfLatest(intended, 'sent', { ...capturedDetail(call), idempotency_key: idempotencyKeyOf(intended) });
     } catch (error) {
       if (error instanceof LedgerUnavailableError) return unavailable(error);
       throw error;

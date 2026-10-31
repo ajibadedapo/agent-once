@@ -16,6 +16,11 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function idempotencyKeyOf(ctx: ReconcileContext): string {
+  const recorded = ctx.event.detail.idempotency_key;
+  return typeof recorded === 'string' ? recorded : ctx.actionId;
+}
+
 function capturedOf(ctx: ReconcileContext): string | undefined {
   const recorded = ctx.event.detail.captured;
   return typeof recorded === 'string' ? recorded : undefined;
@@ -37,6 +42,7 @@ export class ReadBackReconciler {
     const vars: TemplateVars = {
       args: ctx.args,
       actionId: ctx.actionId,
+      idempotencyKey: idempotencyKeyOf(ctx),
       ...(captured === undefined ? {} : { captured }),
       ...(this.options.origin === undefined ? {} : { origin: this.options.origin }),
     };

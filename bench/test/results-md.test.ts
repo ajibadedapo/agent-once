@@ -1,0 +1,128 @@
+import { describe, expect, test } from 'vitest';
+import type { LatencyReport } from '../src/latency.js';
+import type { BenchRecord } from '../src/matrix.js';
+import { renderResults, type ResultsInput } from '../src/results-md.js';
+
+const LATENCY: LatencyReport = {
+  core: { p50Ms: 0.213, p99Ms: 0.912, meanMs: 0.301 },
+  proxy: { p50Ms: 0.481, p99Ms: 1.734, meanMs: 0.552 },
+  python: { p50Ms: 0.377, p99Ms: 1.204, meanMs: 0.418 },
+  iterations: 5_000,
+  warmup: 500,
+  machine: { node: 'v22.23.4', cpu: 'Test CPU (8 cores)', os: 'darwin 25.6.0 arm64', sqlite: '3.53.4', python: '3.12.9' },
+};
+
+function record(overrides: Partial<BenchRecord>): BenchRecord {
+  return {
+    path: 'api',
+    scenario: 'lost_response_after_commit',
+    target: 'checkout',
+    agent: 'scripted:naive',
+    guard: true,
+    effects: 1,
+    duplicate: false,
+    missing: false,
+    agentCalls: 2,
+    blockedOrDoubt: 1,
+    durationMs: 2_001,
+    responseChars: null,
+    ...overrides,
+  };
+}
+
+const RECORDS: BenchRecord[] = [
+  record({ guard: false, effects: 2, duplicate: true }),
+  record({}),
+  record({ agent: 'scripted:obedient', scenario: 'no_fault', target: 'email', guard: false, agentCalls: 1, blockedOrDoubt: 0 }),
+  record({ agent: 'scripted:obedient', scenario: 'no_fault', target: 'email', agentCalls: 1, blockedOrDoubt: 0 }),
+  record({ path: 'browser', agent: 'scripted-browser:naive', scenario: 'slow_commit', target: 'booking', guard: false, effects: 2, duplicate: true, agentCalls: 6, responseChars: 4_800 }),
+  record({ path: 'browser', agent: 'scripted-browser:naive', scenario: 'slow_commit', target: 'booking', agentCalls: 9, responseChars: 7_200, snapshotChars: [400, 600, 800] }),
+  record({ path: 'browser', agent: 'scripted-browser:naive', scenario: 'slow_commit', target: 'booking', agentCalls: 9, responseChars: 7_200, snapshotChars: [1_000, 1_200, 1_400] }),
+];
+
+function input(overrides: Partial<ResultsInput> = {}): ResultsInput {
+  return {
+    command: 'npm run bench && npm run bench:browser',
+    generatedAt: '2026-10-31T21:15:42.678Z',
+    latency: LATENCY,
+    records: RECORDS,
+    notRun: ['Claude via the Claude Agent SDK: no API key in the environment; needs approval'],
+    realRunPlan: { agents: ['claude-agent-sdk', 'openai'], runsPerCell: 3, apiCells: 48, browserCells: 24 },
+    ...overrides,
+  };
+}
+
+function section(markdown: string, heading: string): string {
+  const start = markdown.indexOf(`## ${heading}\n`);
+  expect(start, `missing section ${heading}`).toBeGreaterThanOrEqual(0);
+  const next = markdown.indexOf('\n## ', start + 1);
+  return markdown.slice(start, next === -1 ? undefined : next);
+}
+
+describe('renderResults', () => {
+  test('renderResults includes the overhead table, every cell with run counts, the Not run section and the Failures section', () => {
+    const markdown = renderResults(input());
+    expect(markdown).toContain('npm run bench && npm run bench:browser');
+    const overhead = section(markdown, 'Guard overhead');
+    expect(overhead).toMatch(/\| Core: Guard\.run on SQLite WAL \| 0\.213 \| 0\.912 \| 0\.301 \| 5000 \|/);
+    expect(overhead).toMatch(/\| Proxy: guarded tools\/call through the in-process MCP proxy \| 0\.481 \| 1\.734 \| 0\.552 \| 5000 \|/);
+    expect(overhead).toMatch(/\| Python: Guard\.run on sqlite3 WAL \| 0\.377 \| 1\.204 \| 0\.418 \| 5000 \|/);
+    expect(overhead).toContain('under 5 ms');
+    expect(overhead).toContain('Met: yes');
+    expect(overhead).toContain('Test CPU (8 cores)');
+    expect(overhead).toContain('SQLite 3.53.4');
+    const api = section(markdown, 'API path');
+    expect(api).toContain('deterministic');
+    expect(api).toMatch(/\| scripted:naive \| lost_response_after_commit \| checkout \| 1 \| 100\.0% \(1\/1\) \| 0\.0% \(0\/1\) \| 1 \| 0\.0% \(0\/1\) \| 0\.0% \(0\/1\) \|/);
+    expect(api).toMatch(/\| scripted:obedient \| no_fault \| email \| 1 \| 0\.0% \(0\/1\) \| 0\.0% \(0\/1\) \| 1 \| 0\.0% \(0\/1\) \| 0\.0% \(0\/1\) \|/);
+    const browser = section(markdown, 'Browser path');
+    expect(browser).toMatch(/\| scripted-browser:naive \| slow_commit \| booking \| 1 \| 100\.0% \(1\/1\) \| 0\.0% \(0\/1\) \| 2 \| 0\.0% \(0\/2\) \| 0\.0% \(0\/2\) \|/);
+    expect(section(markdown, 'Not run')).toContain('Claude via the Claude Agent SDK: no API key in the environment; needs approval');
+    expect(section(markdown, 'Failures')).toContain('None');
+  });
+
+  test('a guarded duplicate appears under Failures', () => {
+    const duplicate = record({ path: 'browser', agent: 'scripted-browser:naive', scenario: 'timeout_before_commit', target: 'ticket', effects: 2, duplicate: true });
+    const missing = record({ scenario: 'crash_mid_run', target: 'email', effects: 0, missing: true });
+    const failures = section(renderResults(input({ records: [...RECORDS, duplicate, missing] })), 'Failures');
+    expect(failures).toContain('duplicate: browser path, scripted-browser:naive, timeout_before_commit, ticket, 2 effects');
+    expect(failures).toContain('missing: API path, scripted:naive, crash_mid_run, email, 0 effects');
+    expect(failures).not.toContain('None');
+  });
+
+  test('the browser connection reset is published as a known limitation with its reason', () => {
+    const reset = [false, true].map((guard) =>
+      record({ path: 'browser', agent: 'scripted-browser:naive', scenario: 'connection_reset_after_commit', guard, effects: 2, duplicate: true }),
+    );
+    const markdown = renderResults(input({ records: [...RECORDS, ...reset] }));
+    expect(section(markdown, 'Failures')).toMatch(/duplicate: browser path, scripted-browser:naive, connection_reset_after_commit, checkout, 2 effects \(known limitation: Chromium re-sends the POST below the MCP layer/);
+    expect(section(markdown, 'Known limitations')).toContain('connection_reset_after_commit');
+    expect(section(markdown, 'Browser path')).toContain('with the guard 1 duplicate, 1 of which is the known limitation connection_reset_after_commit, and 0 missing effects in 3 runs');
+  });
+
+  test('nothing unmeasured is given a number', () => {
+    const markdown = renderResults(input({ latency: { ...LATENCY, python: null, machine: { ...LATENCY.machine, python: null } }, records: RECORDS.filter((row) => row.path === 'api') }));
+    expect(section(markdown, 'Guard overhead')).toMatch(/\| Python: Guard\.run on sqlite3 WAL \| not measured \| not measured \| not measured \| not measured \|/);
+    expect(section(markdown, 'Browser path')).toContain('Not run in this results file');
+    expect(renderResults(input({ latency: null }))).toContain('Guard overhead was not measured');
+  });
+
+  test('the real-model estimate lists its token assumptions from measured browser and API runs', () => {
+    const estimate = section(renderResults(input()), 'Not run');
+    expect(estimate).toContain('Cost estimate: to be filled in');
+    expect(estimate).toContain('3 runs per cell');
+    expect(estimate).toMatch(/API path: 48 cells x 3 runs x 2 agents = 288 runs/);
+    expect(estimate).toMatch(/browser path: 24 cells x 3 runs x 2 agents = 144 runs/);
+    expect(estimate).toMatch(/browser tool calls per run: mean 8\.0, max 9 \(scripted browser agent\)/);
+    expect(estimate).toMatch(/browser tool response size: mean 800 characters per call, about 200 tokens/);
+    expect(estimate).toMatch(/browser_snapshot size: mean 900 characters, about 225 tokens at the same assumed ratio; largest 1400 characters, about 350 tokens, over 6 snapshots/);
+  });
+
+  test('real-model runs get their own section and stay out of the scripted tables and estimates', () => {
+    const real = [false, true].map((guard) => record({ agent: 'claude-agent-sdk', guard, agentCalls: null, blockedOrDoubt: null, durationMs: 41_234 }));
+    const markdown = renderResults(input({ records: [...RECORDS, ...real] }));
+    expect(section(markdown, 'API path')).not.toContain('claude-agent-sdk');
+    expect(section(markdown, 'Real-model runs')).toMatch(/\| claude-agent-sdk \| lost_response_after_commit \| checkout \| 1 \| 0\.0% \(0\/1\) \| 0\.0% \(0\/1\) \| 1 \| 0\.0% \(0\/1\) \| 0\.0% \(0\/1\) \|/);
+    expect(section(markdown, 'Not run')).toMatch(/API tool calls per run: mean 1\.5, max 2 \(scripted agents\)/);
+  });
+});

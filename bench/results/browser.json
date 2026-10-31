@@ -1,0 +1,2610 @@
+{
+  "measuredAt": "2026-10-31T22:08:29.385Z",
+  "command": "npm run bench:browser",
+  "data": [
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1448,
+      "snapshotChars": [
+        505
+      ],
+      "durationMs": 1913
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1448,
+      "snapshotChars": [
+        505
+      ],
+      "durationMs": 1362
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1448,
+      "snapshotChars": [
+        505
+      ],
+      "durationMs": 1231
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1458,
+      "snapshotChars": [
+        515
+      ],
+      "durationMs": 1233
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1458,
+      "snapshotChars": [
+        515
+      ],
+      "durationMs": 1264
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1458,
+      "snapshotChars": [
+        515
+      ],
+      "durationMs": 1287
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1563,
+      "snapshotChars": [
+        626
+      ],
+      "durationMs": 1656
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1563,
+      "snapshotChars": [
+        626
+      ],
+      "durationMs": 1212
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1563,
+      "snapshotChars": [
+        626
+      ],
+      "durationMs": 1229
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1513,
+      "snapshotChars": [
+        562
+      ],
+      "durationMs": 1216
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1513,
+      "snapshotChars": [
+        562
+      ],
+      "durationMs": 1198
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1513,
+      "snapshotChars": [
+        562
+      ],
+      "durationMs": 1213
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2923,
+      "snapshotChars": [
+        505,
+        493
+      ],
+      "durationMs": 3011
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2923,
+      "snapshotChars": [
+        505,
+        493
+      ],
+      "durationMs": 2813
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2923,
+      "snapshotChars": [
+        505,
+        493
+      ],
+      "durationMs": 2913
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2941,
+      "snapshotChars": [
+        515,
+        503
+      ],
+      "durationMs": 2809
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2941,
+      "snapshotChars": [
+        515,
+        503
+      ],
+      "durationMs": 2971
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2941,
+      "snapshotChars": [
+        515,
+        503
+      ],
+      "durationMs": 2985
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3160,
+      "snapshotChars": [
+        626,
+        618
+      ],
+      "durationMs": 2922
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3160,
+      "snapshotChars": [
+        626,
+        618
+      ],
+      "durationMs": 2823
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3160,
+      "snapshotChars": [
+        626,
+        618
+      ],
+      "durationMs": 2797
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3054,
+      "snapshotChars": [
+        562,
+        550
+      ],
+      "durationMs": 2836
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3054,
+      "snapshotChars": [
+        562,
+        550
+      ],
+      "durationMs": 2817
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3054,
+      "snapshotChars": [
+        562,
+        550
+      ],
+      "durationMs": 2822
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2923,
+      "snapshotChars": [
+        505,
+        493
+      ],
+      "durationMs": 2808
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2923,
+      "snapshotChars": [
+        505,
+        493
+      ],
+      "durationMs": 2808
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2923,
+      "snapshotChars": [
+        505,
+        493
+      ],
+      "durationMs": 2815
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2941,
+      "snapshotChars": [
+        515,
+        503
+      ],
+      "durationMs": 4041
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2941,
+      "snapshotChars": [
+        515,
+        503
+      ],
+      "durationMs": 3585
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2941,
+      "snapshotChars": [
+        515,
+        503
+      ],
+      "durationMs": 2938
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3160,
+      "snapshotChars": [
+        626,
+        618
+      ],
+      "durationMs": 2976
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3160,
+      "snapshotChars": [
+        626,
+        618
+      ],
+      "durationMs": 2880
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3160,
+      "snapshotChars": [
+        626,
+        618
+      ],
+      "durationMs": 2821
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3054,
+      "snapshotChars": [
+        562,
+        550
+      ],
+      "durationMs": 2822
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3054,
+      "snapshotChars": [
+        562,
+        550
+      ],
+      "durationMs": 2805
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3054,
+      "snapshotChars": [
+        562,
+        550
+      ],
+      "durationMs": 2814
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2923,
+      "snapshotChars": [
+        505,
+        493
+      ],
+      "durationMs": 2803
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2923,
+      "snapshotChars": [
+        505,
+        493
+      ],
+      "durationMs": 2827
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2923,
+      "snapshotChars": [
+        505,
+        493
+      ],
+      "durationMs": 2834
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2941,
+      "snapshotChars": [
+        515,
+        503
+      ],
+      "durationMs": 2816
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2941,
+      "snapshotChars": [
+        515,
+        503
+      ],
+      "durationMs": 3068
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2941,
+      "snapshotChars": [
+        515,
+        503
+      ],
+      "durationMs": 2917
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3160,
+      "snapshotChars": [
+        626,
+        618
+      ],
+      "durationMs": 2961
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3160,
+      "snapshotChars": [
+        626,
+        618
+      ],
+      "durationMs": 2829
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3160,
+      "snapshotChars": [
+        626,
+        618
+      ],
+      "durationMs": 2799
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3054,
+      "snapshotChars": [
+        562,
+        550
+      ],
+      "durationMs": 2841
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3054,
+      "snapshotChars": [
+        562,
+        550
+      ],
+      "durationMs": 2825
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3054,
+      "snapshotChars": [
+        562,
+        550
+      ],
+      "durationMs": 2817
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2905,
+      "snapshotChars": [
+        505,
+        493
+      ],
+      "durationMs": 2845
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2905,
+      "snapshotChars": [
+        505,
+        493
+      ],
+      "durationMs": 2838
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2905,
+      "snapshotChars": [
+        505,
+        493
+      ],
+      "durationMs": 2819
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2926,
+      "snapshotChars": [
+        515,
+        503
+      ],
+      "durationMs": 2815
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2926,
+      "snapshotChars": [
+        515,
+        503
+      ],
+      "durationMs": 2855
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2926,
+      "snapshotChars": [
+        515,
+        503
+      ],
+      "durationMs": 2847
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3147,
+      "snapshotChars": [
+        626,
+        618
+      ],
+      "durationMs": 2827
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3147,
+      "snapshotChars": [
+        626,
+        618
+      ],
+      "durationMs": 2895
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3147,
+      "snapshotChars": [
+        626,
+        618
+      ],
+      "durationMs": 2837
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3049,
+      "snapshotChars": [
+        562,
+        550
+      ],
+      "durationMs": 2863
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3049,
+      "snapshotChars": [
+        562,
+        550
+      ],
+      "durationMs": 2825
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 3049,
+      "snapshotChars": [
+        562,
+        550
+      ],
+      "durationMs": 2814
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1448,
+      "snapshotChars": [
+        505
+      ],
+      "durationMs": 1230
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1448,
+      "snapshotChars": [
+        505
+      ],
+      "durationMs": 1195
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1448,
+      "snapshotChars": [
+        505
+      ],
+      "durationMs": 1885
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1458,
+      "snapshotChars": [
+        515
+      ],
+      "durationMs": 1925
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1458,
+      "snapshotChars": [
+        515
+      ],
+      "durationMs": 2154
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1458,
+      "snapshotChars": [
+        515
+      ],
+      "durationMs": 1580
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1563,
+      "snapshotChars": [
+        626
+      ],
+      "durationMs": 1230
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1563,
+      "snapshotChars": [
+        626
+      ],
+      "durationMs": 1308
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1563,
+      "snapshotChars": [
+        626
+      ],
+      "durationMs": 1251
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1513,
+      "snapshotChars": [
+        562
+      ],
+      "durationMs": 1228
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1513,
+      "snapshotChars": [
+        562
+      ],
+      "durationMs": 1195
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": false,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1513,
+      "snapshotChars": [
+        562
+      ],
+      "durationMs": 1270
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1448,
+      "snapshotChars": [
+        505
+      ],
+      "durationMs": 1448
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1448,
+      "snapshotChars": [
+        505
+      ],
+      "durationMs": 1437
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1448,
+      "snapshotChars": [
+        505
+      ],
+      "durationMs": 1598
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1458,
+      "snapshotChars": [
+        515
+      ],
+      "durationMs": 1493
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1458,
+      "snapshotChars": [
+        515
+      ],
+      "durationMs": 1457
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1458,
+      "snapshotChars": [
+        515
+      ],
+      "durationMs": 1375
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1563,
+      "snapshotChars": [
+        626
+      ],
+      "durationMs": 1460
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1563,
+      "snapshotChars": [
+        626
+      ],
+      "durationMs": 1424
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1563,
+      "snapshotChars": [
+        626
+      ],
+      "durationMs": 1430
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1513,
+      "snapshotChars": [
+        562
+      ],
+      "durationMs": 1399
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1513,
+      "snapshotChars": [
+        562
+      ],
+      "durationMs": 1709
+    },
+    {
+      "path": "browser",
+      "scenario": "no_fault",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1513,
+      "snapshotChars": [
+        562
+      ],
+      "durationMs": 1514
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2685,
+      "snapshotChars": [
+        505,
+        493
+      ],
+      "durationMs": 2701
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2685,
+      "snapshotChars": [
+        505,
+        493
+      ],
+      "durationMs": 2554
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2685,
+      "snapshotChars": [
+        505,
+        493
+      ],
+      "durationMs": 2370
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2704,
+      "snapshotChars": [
+        515,
+        503
+      ],
+      "durationMs": 2420
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2704,
+      "snapshotChars": [
+        515,
+        503
+      ],
+      "durationMs": 2396
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2704,
+      "snapshotChars": [
+        515,
+        503
+      ],
+      "durationMs": 2356
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2927,
+      "snapshotChars": [
+        626,
+        618
+      ],
+      "durationMs": 2453
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2927,
+      "snapshotChars": [
+        626,
+        618
+      ],
+      "durationMs": 2417
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2927,
+      "snapshotChars": [
+        626,
+        618
+      ],
+      "durationMs": 2402
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2817,
+      "snapshotChars": [
+        562,
+        550
+      ],
+      "durationMs": 2790
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2817,
+      "snapshotChars": [
+        562,
+        550
+      ],
+      "durationMs": 2427
+    },
+    {
+      "path": "browser",
+      "scenario": "lost_response_after_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 6,
+      "blockedOrDoubt": 0,
+      "responseChars": 2817,
+      "snapshotChars": [
+        562,
+        550
+      ],
+      "durationMs": 2445
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 9,
+      "blockedOrDoubt": 1,
+      "responseChars": 3867,
+      "snapshotChars": [
+        505,
+        493,
+        493
+      ],
+      "durationMs": 4525
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 9,
+      "blockedOrDoubt": 1,
+      "responseChars": 3867,
+      "snapshotChars": [
+        505,
+        493,
+        493
+      ],
+      "durationMs": 4603
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 9,
+      "blockedOrDoubt": 1,
+      "responseChars": 3867,
+      "snapshotChars": [
+        505,
+        493,
+        493
+      ],
+      "durationMs": 4437
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 9,
+      "blockedOrDoubt": 1,
+      "responseChars": 3925,
+      "snapshotChars": [
+        515,
+        503,
+        503
+      ],
+      "durationMs": 4477
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 9,
+      "blockedOrDoubt": 1,
+      "responseChars": 3925,
+      "snapshotChars": [
+        515,
+        503,
+        503
+      ],
+      "durationMs": 4474
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 9,
+      "blockedOrDoubt": 1,
+      "responseChars": 3925,
+      "snapshotChars": [
+        515,
+        503,
+        503
+      ],
+      "durationMs": 4526
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 9,
+      "blockedOrDoubt": 1,
+      "responseChars": 4240,
+      "snapshotChars": [
+        626,
+        618,
+        618
+      ],
+      "durationMs": 4463
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 9,
+      "blockedOrDoubt": 1,
+      "responseChars": 4240,
+      "snapshotChars": [
+        626,
+        618,
+        618
+      ],
+      "durationMs": 4485
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 9,
+      "blockedOrDoubt": 1,
+      "responseChars": 4240,
+      "snapshotChars": [
+        626,
+        618,
+        618
+      ],
+      "durationMs": 4484
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 9,
+      "blockedOrDoubt": 1,
+      "responseChars": 4093,
+      "snapshotChars": [
+        562,
+        550,
+        550
+      ],
+      "durationMs": 4446
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 9,
+      "blockedOrDoubt": 1,
+      "responseChars": 4093,
+      "snapshotChars": [
+        562,
+        550,
+        550
+      ],
+      "durationMs": 4452
+    },
+    {
+      "path": "browser",
+      "scenario": "slow_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 9,
+      "blockedOrDoubt": 1,
+      "responseChars": 4093,
+      "snapshotChars": [
+        562,
+        550,
+        550
+      ],
+      "durationMs": 4476
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5180,
+      "snapshotChars": [
+        505,
+        493,
+        493,
+        493
+      ],
+      "durationMs": 9089
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5180,
+      "snapshotChars": [
+        505,
+        493,
+        493,
+        493
+      ],
+      "durationMs": 9083
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5180,
+      "snapshotChars": [
+        505,
+        493,
+        493,
+        493
+      ],
+      "durationMs": 9096
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5248,
+      "snapshotChars": [
+        515,
+        503,
+        503,
+        503
+      ],
+      "durationMs": 9097
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5248,
+      "snapshotChars": [
+        515,
+        503,
+        503,
+        503
+      ],
+      "durationMs": 9105
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5248,
+      "snapshotChars": [
+        515,
+        503,
+        503,
+        503
+      ],
+      "durationMs": 9092
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5672,
+      "snapshotChars": [
+        626,
+        618,
+        618,
+        618
+      ],
+      "durationMs": 9113
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5672,
+      "snapshotChars": [
+        626,
+        618,
+        618,
+        618
+      ],
+      "durationMs": 9202
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5672,
+      "snapshotChars": [
+        626,
+        618,
+        618,
+        618
+      ],
+      "durationMs": 9115
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5471,
+      "snapshotChars": [
+        562,
+        550,
+        550,
+        550
+      ],
+      "durationMs": 9090
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5471,
+      "snapshotChars": [
+        562,
+        550,
+        550,
+        550
+      ],
+      "durationMs": 9232
+    },
+    {
+      "path": "browser",
+      "scenario": "timeout_before_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5471,
+      "snapshotChars": [
+        562,
+        550,
+        550,
+        550
+      ],
+      "durationMs": 9073
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5162,
+      "snapshotChars": [
+        505,
+        493,
+        493,
+        493
+      ],
+      "durationMs": 9078
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5162,
+      "snapshotChars": [
+        505,
+        493,
+        493,
+        493
+      ],
+      "durationMs": 9051
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5162,
+      "snapshotChars": [
+        505,
+        493,
+        493,
+        493
+      ],
+      "durationMs": 9130
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5233,
+      "snapshotChars": [
+        515,
+        503,
+        503,
+        503
+      ],
+      "durationMs": 9183
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5233,
+      "snapshotChars": [
+        515,
+        503,
+        503,
+        503
+      ],
+      "durationMs": 10121
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5233,
+      "snapshotChars": [
+        515,
+        503,
+        503,
+        503
+      ],
+      "durationMs": 9351
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5659,
+      "snapshotChars": [
+        626,
+        618,
+        618,
+        618
+      ],
+      "durationMs": 9563
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5659,
+      "snapshotChars": [
+        626,
+        618,
+        618,
+        618
+      ],
+      "durationMs": 9206
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5659,
+      "snapshotChars": [
+        626,
+        618,
+        618,
+        618
+      ],
+      "durationMs": 9277
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5466,
+      "snapshotChars": [
+        562,
+        550,
+        550,
+        550
+      ],
+      "durationMs": 9114
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5466,
+      "snapshotChars": [
+        562,
+        550,
+        550,
+        550
+      ],
+      "durationMs": 9125
+    },
+    {
+      "path": "browser",
+      "scenario": "stale_element",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 1,
+      "duplicate": false,
+      "missing": false,
+      "agentCalls": 12,
+      "blockedOrDoubt": 1,
+      "responseChars": 5466,
+      "snapshotChars": [
+        562,
+        550,
+        550,
+        550
+      ],
+      "durationMs": 9139
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1448,
+      "snapshotChars": [
+        505
+      ],
+      "durationMs": 1353
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1448,
+      "snapshotChars": [
+        505
+      ],
+      "durationMs": 1329
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "checkout",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1448,
+      "snapshotChars": [
+        505
+      ],
+      "durationMs": 1313
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1458,
+      "snapshotChars": [
+        515
+      ],
+      "durationMs": 1318
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1458,
+      "snapshotChars": [
+        515
+      ],
+      "durationMs": 1328
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "booking",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1458,
+      "snapshotChars": [
+        515
+      ],
+      "durationMs": 1367
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1563,
+      "snapshotChars": [
+        626
+      ],
+      "durationMs": 1342
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1563,
+      "snapshotChars": [
+        626
+      ],
+      "durationMs": 1340
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "email",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1563,
+      "snapshotChars": [
+        626
+      ],
+      "durationMs": 1318
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1513,
+      "snapshotChars": [
+        562
+      ],
+      "durationMs": 1320
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1513,
+      "snapshotChars": [
+        562
+      ],
+      "durationMs": 1326
+    },
+    {
+      "path": "browser",
+      "scenario": "connection_reset_after_commit",
+      "target": "ticket",
+      "agent": "scripted-browser:naive",
+      "guard": true,
+      "effects": 2,
+      "duplicate": true,
+      "missing": false,
+      "agentCalls": 3,
+      "blockedOrDoubt": 0,
+      "responseChars": 1513,
+      "snapshotChars": [
+        562
+      ],
+      "durationMs": 1353
+    }
+  ]
+}

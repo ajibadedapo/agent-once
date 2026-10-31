@@ -1,0 +1,23 @@
+{
+  "name": "agent-once-bench",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "author": "Hammed Ajibade",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "bench": "npm run build && node dist/main.js api",
+    "bench:browser": "npm run build && node ../packages/agent-once/scripts/check-chromium.mjs && node dist/main.js browser",
+    "bench:latency": "npm run build && node dist/main.js latency",
+    "bench:real": "npm run build && node dist/main.js real"
+  },
+  "devDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.316",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@playwright/mcp": "0.0.83",
+    "agent-once": "0.1.0"
+  }
+}

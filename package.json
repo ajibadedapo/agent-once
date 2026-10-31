@@ -11,11 +11,15 @@
   },
   "scripts": {
     "check:style": "node scripts/check-style.mjs && uv run --project python python scripts/check_style.py",
-    "test": "node --test scripts/check-style.test.mjs scripts/spec-vectors.test.mjs scripts/spec-sql.test.mjs && uv run --project python python scripts/check_style.py --self-test && uv run --project python python scripts/gen_identity_vectors.py --check && npm test --workspace agent-once && node --test scripts/check-action.test.mjs && uv run --project python pytest python/tests",
+    "test": "node --test scripts/check-style.test.mjs scripts/spec-vectors.test.mjs scripts/spec-sql.test.mjs && uv run --project python python scripts/check_style.py --self-test && uv run --project python python scripts/gen_identity_vectors.py --check && npm test --workspace agent-once && npm test --workspace agent-once-bench && node --test scripts/check-action.test.mjs && uv run --project python pytest python/tests",
     "test:browser": "npm run test:browser --workspace agent-once",
     "build": "npm run build --workspace agent-once",
-    "typecheck": "npm run typecheck --workspace agent-once && npm run typecheck:examples",
-    "typecheck:examples": "npm run build && tsc -p examples/tsconfig.json"
+    "typecheck": "npm run typecheck --workspace agent-once && npm run typecheck:examples && npm run typecheck --workspace agent-once-bench",
+    "typecheck:examples": "npm run build && tsc -p examples/tsconfig.json",
+    "bench": "npm run bench --workspace agent-once-bench --",
+    "bench:browser": "npm run bench:browser --workspace agent-once-bench --",
+    "bench:latency": "npm run bench:latency --workspace agent-once-bench --",
+    "bench:real": "npm run bench:real --workspace agent-once-bench --"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

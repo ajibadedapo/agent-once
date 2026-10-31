@@ -1,6 +1,6 @@
 export { chaosTargetsPreset } from './presets.js';
 export { STALE_FORM_ERROR } from './targets/api-routes.js';
-export { TARGET_NAMES, type TargetName } from './targets/catalog.js';
+export { TARGET_NAMES, TARGETS, type TargetName, type TargetSpec } from './targets/catalog.js';
 export { FAULT_KINDS, FaultPlanError, parseFaultPlan, type FaultKind, type FaultPlan } from './targets/faults.js';
 export { startTargets, type RunningTargets, type TargetsOptions } from './targets/server.js';
 export type { Effect } from './targets/store.js';
@@ -8,4 +8,5 @@ export { createTargetsMcpServer, DEFAULT_TARGETS_TIMEOUT_MS, type TargetsMcpOpti
 export { checkEffects, flushPendingCommits, UnscorableRunError, type EffectCheck } from './checker.js';
 export { renderMarkdown, summarize, type MatrixSummary, type RateRow } from './report.js';
 export { agentName, CHAOS_START_MS, runMatrix, runScenario, runsFor, type AgentKind, type MatrixOptions, type RunRecord, type RunScenarioOptions } from './runner.js';
-export { BROWSER_SCENARIOS, CHAOS_TASKS, SCENARIO_NAMES, SCENARIOS, type BrowserScenarioName, type ChaosTask, type RunnableScenario, type ScenarioName, type ScenarioSpec } from './scenarios.js';
+export { BROWSER_SCENARIOS, CHAOS_TASKS, REAL_CLOCK_HOLD_MS, REAL_CLOCK_SETTLE_SECONDS, SCENARIO_NAMES, SCENARIOS, type BrowserScenarioName, type ChaosTask, type RunnableScenario, type ScenarioName, type ScenarioSpec } from './scenarios.js';
+export { startExternalAgent, type ExternalAgentOptions, type ExternalAgentRun } from './agents/external-agent.js';

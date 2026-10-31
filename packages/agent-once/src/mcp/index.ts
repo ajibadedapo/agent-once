@@ -6,6 +6,7 @@ export {
   type ProxyExtension,
   type RunningProxy,
 } from './proxy.js';
+export { createGuardedProxy, guardSettings, proxyExtensions, type GuardedProxyOptions } from './guarded-proxy.js';
 export { UpstreamStdioTransport, type ExitAwareTransport } from './upstream.js';
 export { resolveSession, type SessionIdentity } from './session.js';
 export { findToolRule, resolveToolPolicy, type ToolPolicyDecision } from './tool-policy.js';

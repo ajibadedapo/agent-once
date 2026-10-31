@@ -159,4 +159,5 @@ jobs:
           python-version: "3.12"
       - run: npm ci --no-audit --no-fund
       - run: npm run build
-      - run: npm run --if-present bench:latency
+      - run: npm test --workspace agent-once-bench
+      - run: npm run bench:latency -- --smoke

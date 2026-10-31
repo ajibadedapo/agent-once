@@ -8,7 +8,7 @@
 
 **Tech Stack:** Node 22.13+ (ESM, `node:sqlite`), TypeScript strict, vitest, fast-check, `@modelcontextprotocol/sdk` 1.32.x; Python 3.10+ with uv, pytest, hypothesis, ruff, mypy --strict; GitHub Actions. No other runtime dependencies without a recorded reason.
 
-**Spec:** /Users/hammed/code/agent-once/docs/design.md (the sections "Decisions after the builder check" and "Corrections to earlier claims" supersede earlier text).
+**Spec:** docs/design.md (the sections "Decisions after the builder check" and "Corrections to earlier claims" supersede earlier text).
 
 ## Verified facts (31 Oct 2026, recorded at plan time)
 

@@ -1,12 +1,12 @@
 import { canonicalize, type JsonValue } from '../canonical/jcs.js';
-import type { EvidenceKind, EvidenceSink } from '../evidence/types.js';
+import type { EvidenceEvent, EvidenceKind, EvidenceSink } from '../evidence/types.js';
 import { actionId as deriveActionId, intentHash } from '../identity/identity.js';
 import { DEFAULT_VOLATILE_KEYS, projectArgs } from '../identity/project-args.js';
 import { LedgerConflictError, LedgerUnavailableError } from '../ledger/errors.js';
 import type { GuardPolicy, LedgerEvent, LedgerState, LedgerStore, LedgerTx, NewLedgerEvent } from '../ledger/types.js';
 import type { Clock } from '../time/clock.js';
 import { decide } from './decide.js';
-import { DEFAULT_MAX_RESULT_BYTES, capResult } from './result-cap.js';
+import { DEFAULT_MAX_RESULT_BYTES, storedResultDetail } from './result-cap.js';
 import {
   ActionInDoubtError,
   GuardedCallFailedError,
@@ -40,6 +40,7 @@ export interface GuardDeps {
   settleWindowMs?: number;
   storeArgs?: boolean;
   maxResultBytes?: number;
+  onEvidenceError?: (error: unknown, event: EvidenceEvent) => void;
 }
 
 type ProtectedCall = GuardedCall & { policy: GuardPolicy };
@@ -58,6 +59,15 @@ type Claim =
 const DECIDE_AGAIN = Symbol('decide again');
 type Step = GuardResult | typeof DECIDE_AGAIN;
 
+interface Resolution {
+  event: LedgerEvent;
+  outcome: 'happened' | 'not_happened';
+  by: 'reconciler' | 'human';
+  result?: JsonValue;
+}
+
+const INHERITED_KEY_REASONS: ReadonlySet<string> = new Set(['failed_after_window', 'not_dispatched']);
+
 interface EvidenceSubject {
   actionId?: string;
   tool: string;
@@ -66,6 +76,15 @@ interface EvidenceSubject {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function reportToStderr(error: unknown): void {
+  process.stderr.write(`agent-once: evidence sink failed: ${errorMessage(error)}\n`);
+}
+
+function idempotencyKeyOf(event: LedgerEvent): string {
+  const key = event.detail.idempotency_key;
+  return typeof key === 'string' ? key : event.actionId;
 }
 
 function isProtected(call: GuardedCall): call is ProtectedCall {
@@ -120,6 +139,7 @@ export class Guard {
   private readonly settleWindowMs: number;
   private readonly storeArgs: boolean;
   private readonly maxResultBytes: number;
+  private readonly onEvidenceError: (error: unknown, event: EvidenceEvent) => void;
   private readonly inFlight = new Map<string, Promise<GuardResult>>();
 
   constructor(deps: GuardDeps) {
@@ -133,6 +153,10 @@ export class Guard {
     this.settleWindowMs = deps.settleWindowMs ?? DEFAULT_SETTLE_WINDOW_MS;
     this.storeArgs = deps.storeArgs ?? true;
     this.maxResultBytes = deps.maxResultBytes ?? DEFAULT_MAX_RESULT_BYTES;
+    this.onEvidenceError = deps.onEvidenceError ?? reportToStderr;
+    if (this.settleWindowMs > this.retryWindowMs) {
+      throw new RangeError(`settleWindowMs (${this.settleWindowMs}) must not exceed retryWindowMs (${this.retryWindowMs})`);
+    }
   }
 
   async run(call: GuardedCall, execute: Execute): Promise<GuardResult> {
@@ -150,6 +174,15 @@ export class Guard {
   }
 
   resolve(actionId: string, outcome: 'happened' | 'not_happened', by: ResolvedBy): ResolveResult {
+    try {
+      return this.resolveInLedger(actionId, outcome, by);
+    } catch (error) {
+      if (error instanceof LedgerUnavailableError) return { ok: false, reason: 'ledger_unavailable', error: error.message };
+      throw error;
+    }
+  }
+
+  private resolveInLedger(actionId: string, outcome: 'happened' | 'not_happened', by: ResolvedBy): ResolveResult {
     const found = this.store.findAction(actionId);
     if (found === undefined) return { ok: false, reason: 'unknown_action' };
     const result = this.store.transact((tx): ResolveResult => {
@@ -158,7 +191,7 @@ export class Guard {
       if (latest === undefined || latest.actionId !== actionId || !isUnresolved(latest, nowMs)) return { ok: false, reason: 'not_in_doubt' };
       if (by === 'agent' && latest.toolClass !== 'standard') return { ok: false, reason: 'agent_cannot_resolve_class' };
       if (by === 'agent' && outcome === 'not_happened' && nowMs - latest.atMs < this.settleWindowMs) return { ok: false, reason: 'too_soon' };
-      return { ok: true, event: tx.append(this.followUp(latest, 'reconciled', { outcome, resolved_by: by, result: null })) };
+      return { ok: true, event: tx.append(this.followUp(latest, 'reconciled', { outcome, resolved_by: by, result: null, result_truncated: false })) };
     });
     this.emit(found, 'resolve', result.ok ? { outcome, by, ok: true } : { outcome, by, ok: false, reason: result.reason });
     if (result.ok) this.emitState(result.event);
@@ -202,53 +235,66 @@ export class Guard {
   }
 
   private async runProtected(call: ProtectedCall, identity: Identity, execute: Execute): Promise<GuardResult> {
+    const arrivedMs = this.clock.nowMs();
     let verifiedSeq: number | undefined;
+    let pending: Resolution | undefined;
     for (;;) {
       let claim: Claim;
+      let resolved: LedgerEvent | undefined;
       try {
-        claim = this.store.transact((tx) => this.decideAndClaim(tx, call, identity, verifiedSeq));
+        [claim, resolved] = this.store.transact((tx): [Claim, LedgerEvent | undefined] => {
+          const appended = pending === undefined ? undefined : this.applyResolution(tx, pending);
+          return [this.decideAndClaim(tx, call, identity, arrivedMs, verifiedSeq), appended];
+        });
       } catch (error) {
         if (error instanceof LedgerConflictError) continue;
         if (error instanceof LedgerUnavailableError) return unavailable(error);
         throw error;
       }
+      pending = undefined;
+      if (resolved !== undefined) this.emitState(resolved);
       this.emitDecision(call, claim);
-      let step: Step;
       switch (claim.kind) {
-        case 'execute':
+        case 'execute': {
           this.emitState(claim.intended);
-          step = await this.dispatch(call, claim.intended, execute);
+          const step = await this.dispatch(call, claim.intended, execute);
+          if (step !== DECIDE_AGAIN) return step;
           break;
+        }
         case 'replay':
           return replayed(claim.event, claim.reason);
-        case 'in_doubt':
-          step = await this.handleDoubt(call, claim.event, claim.reason);
+        case 'in_doubt': {
+          const step = await this.handleDoubt(call, claim.event, claim.reason);
+          if ('status' in step) return step;
+          pending = step;
           break;
+        }
         case 'verify': {
           const outcome = await this.reconcile(call, claim.event);
           if (outcome.outcome === 'unknown') verifiedSeq = claim.event.seq;
-          step = outcome.outcome === 'unknown' ? DECIDE_AGAIN : this.recordResolution(claim.event, outcome, 'reconciler');
+          else pending = { event: claim.event, by: 'reconciler', ...outcome };
           break;
         }
       }
-      if (step !== DECIDE_AGAIN) return step;
     }
   }
 
-  private decideAndClaim(tx: LedgerTx, call: ProtectedCall, identity: Identity, verifiedSeq: number | undefined): Claim {
+  private decideAndClaim(tx: LedgerTx, call: ProtectedCall, identity: Identity, arrivedMs: number, verifiedSeq: number | undefined): Claim {
     const latest = tx.latest(identity.hash);
     const nowMs = this.clock.nowMs();
     const decision = decide({
       latest,
-      nowMs,
+      nowMs: arrivedMs,
       retryWindowMs: this.retryWindowMs,
       call: { runInstance: this.runInstance, sessionExplicit: call.sessionExplicit, intentKeyExplicit: call.intentKey !== undefined, policy: call.policy },
     });
     if (decision.kind !== 'execute') return decision;
     const needsVerification = decision.reason === 'failed_after_window' && call.reconciler !== undefined;
     if (latest !== undefined && needsVerification && latest.seq !== verifiedSeq) return { kind: 'verify', event: latest, reason: decision.reason };
+    const newActionId = deriveActionId(identity.hash, decision.occurrence, nowMs);
+    const inherits = latest !== undefined && INHERITED_KEY_REASONS.has(decision.reason);
     const intended = tx.append({
-      actionId: deriveActionId(identity.hash, decision.occurrence, nowMs),
+      actionId: newActionId,
       intentHash: identity.hash,
       occurrence: decision.occurrence,
       state: 'intended',
@@ -262,9 +308,15 @@ export class Guard {
       toolClass: call.toolClass,
       policy: call.policy,
       argsJson: identity.argsJson,
-      detail: capturedDetail(call),
+      detail: { ...capturedDetail(call), idempotency_key: inherits ? idempotencyKeyOf(latest) : newActionId },
     });
     return { kind: 'execute', intended, reason: decision.reason };
+  }
+
+  private applyResolution(tx: LedgerTx, resolution: Resolution): LedgerEvent | undefined {
+    if (tx.latest(resolution.event.intentHash)?.seq !== resolution.event.seq) return undefined;
+    const stored = resolution.result === undefined ? { result: null, result_truncated: false } : storedResultDetail(resolution.result, this.maxResultBytes);
+    return tx.append(this.followUp(resolution.event, 'reconciled', { outcome: resolution.outcome, resolved_by: resolution.by, ...stored }));
   }
 
   private async dispatch(call: ProtectedCall, intended: LedgerEvent, execute: Execute): Promise<Step> {
@@ -277,46 +329,60 @@ export class Guard {
     }
     if (sent === DECIDE_AGAIN) return DECIDE_AGAIN;
     this.emitState(sent);
-    const outcome = await invoke(execute, { actionId: intended.actionId });
-    this.recordOutcome(call, sent, outcome);
-    return { status: 'executed', actionId: intended.actionId, outcome };
+    const idempotencyKey = idempotencyKeyOf(intended);
+    const outcome = await invoke(execute, { actionId: intended.actionId, idempotencyKey });
+    const recorded = this.recordOutcome(call, sent, idempotencyKey, outcome);
+    return recorded ? { status: 'executed', actionId: intended.actionId, outcome } : { status: 'executed', actionId: intended.actionId, outcome, recorded: false };
   }
 
-  private recordOutcome(call: ProtectedCall, sent: LedgerEvent, outcome: ToolOutcome): void {
-    const state = outcome.kind === 'ok' ? 'confirmed' : 'failed';
+  private recordOutcome(call: ProtectedCall, sent: LedgerEvent, idempotencyKey: string, outcome: ToolOutcome): boolean {
     try {
-      const recorded = this.store.transact((tx) => tx.append(this.followUp(sent, state, this.outcomeDetail(call, outcome))));
-      this.emitState(recorded);
+      const recorded = this.store.transact((tx) => {
+        if (outcome.kind !== 'ok' && tx.latest(sent.intentHash)?.seq !== sent.seq) return undefined;
+        const detail = this.outcomeDetail(call, idempotencyKey, outcome);
+        return tx.append(this.followUp(sent, outcome.kind === 'ok' ? 'confirmed' : 'failed', detail));
+      });
+      if (recorded === undefined) this.emit(sent, 'state', { state: 'superseded', occurrence: sent.occurrence, outcome: outcome.kind });
+      else this.emitState(recorded);
+      return true;
     } catch (error) {
       this.emit(sent, 'state', { state: 'unrecorded', occurrence: sent.occurrence, outcome: outcome.kind, error: errorMessage(error) });
+      return false;
     }
   }
 
-  private outcomeDetail(call: ProtectedCall, outcome: ToolOutcome): Record<string, JsonValue> {
+  private outcomeDetail(call: ProtectedCall, idempotencyKey: string, outcome: ToolOutcome): Record<string, JsonValue> {
     switch (outcome.kind) {
       case 'ok': {
-        const capped = capResult(outcome.result, this.maxResultBytes);
         const delivery = call.signal?.aborted === true ? 'cancelled' : 'delivered';
-        return { result: capped.result, result_truncated: capped.truncated, delivery };
+        return { ...storedResultDetail(outcome.result, this.maxResultBytes), delivery };
       }
-      case 'error_result':
-        return { failure_kind: 'error_result', error: ERROR_RESULT_MESSAGE, result: capResult(outcome.result, this.maxResultBytes).result };
+      case 'error_result': {
+        const { result, result_error: resultError } = storedResultDetail(outcome.result, this.maxResultBytes);
+        return {
+          failure_kind: 'error_result',
+          error: ERROR_RESULT_MESSAGE,
+          result: result ?? null,
+          ...(resultError === undefined ? {} : { result_error: resultError }),
+          idempotency_key: idempotencyKey,
+        };
+      }
       case 'transport_error':
       case 'not_dispatched':
-        return { failure_kind: outcome.kind, error: outcome.error, result: null };
+        return { failure_kind: outcome.kind, error: outcome.error, result: null, idempotency_key: idempotencyKey };
     }
   }
 
-  private async handleDoubt(call: ProtectedCall, event: LedgerEvent, reason: string): Promise<Step> {
+  private async handleDoubt(call: ProtectedCall, event: LedgerEvent, reason: string): Promise<GuardResult | Resolution> {
     const doubt: DoubtInfo = { actionId: event.actionId, tool: call.tool, args: call.args, toolClass: call.toolClass, reason, sinceMs: event.atMs };
     if (call.reconciler !== undefined) {
       const outcome = await this.reconcile(call, event);
-      if (outcome.outcome !== 'unknown') return this.recordResolution(event, outcome, 'reconciler');
+      if (outcome.outcome !== 'unknown') return { event, by: 'reconciler', ...outcome };
     }
     if (call.policy === 'guard') return { status: 'in_doubt', doubt };
     const answer = await this.askHuman(doubt);
     if (answer === 'unresolved') return { status: 'blocked', doubt };
-    return this.recordResolution(event, { outcome: answer }, 'human');
+    return { event, by: 'human', outcome: answer };
   }
 
   private async reconcile(call: ProtectedCall, event: LedgerEvent): Promise<ReconcileOutcome> {
@@ -341,22 +407,6 @@ export class Guard {
       return answer === 'happened' || answer === 'not_happened' ? answer : 'unresolved';
     } catch {
       return 'unresolved';
-    }
-  }
-
-  private recordResolution(
-    event: LedgerEvent,
-    outcome: { outcome: 'happened'; result?: JsonValue } | { outcome: 'not_happened' },
-    by: 'reconciler' | 'human',
-  ): Step {
-    const result = outcome.outcome === 'happened' && outcome.result !== undefined ? capResult(outcome.result, this.maxResultBytes).result : null;
-    try {
-      const appended = this.appendIfLatest(event, 'reconciled', { outcome: outcome.outcome, resolved_by: by, result });
-      if (appended !== DECIDE_AGAIN) this.emitState(appended);
-      return DECIDE_AGAIN;
-    } catch (error) {
-      if (error instanceof LedgerUnavailableError) return unavailable(error);
-      throw error;
     }
   }
 
@@ -403,16 +453,25 @@ export class Guard {
   }
 
   private emit(subject: EvidenceSubject, kind: EvidenceKind, detail: Record<string, JsonValue>): void {
+    const event: EvidenceEvent = {
+      v: 1,
+      atMs: this.clock.nowMs(),
+      kind,
+      ...(subject.actionId === undefined ? {} : { actionId: subject.actionId }),
+      tool: subject.tool,
+      sessionKey: subject.sessionKey,
+      detail,
+    };
     try {
-      this.evidence.emit({
-        v: 1,
-        atMs: this.clock.nowMs(),
-        kind,
-        ...(subject.actionId === undefined ? {} : { actionId: subject.actionId }),
-        tool: subject.tool,
-        sessionKey: subject.sessionKey,
-        detail,
-      });
+      this.evidence.emit(event);
+    } catch (error) {
+      this.reportEvidenceError(error, event);
+    }
+  }
+
+  private reportEvidenceError(error: unknown, event: EvidenceEvent): void {
+    try {
+      this.onEvidenceError(error, event);
     } catch {
       return;
     }

@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { CanonicalizationError } from '../src/canonical/jcs.js';
 import { Guard, type GuardDeps } from '../src/guard/guard.js';
 import { ActionInDoubtError, type DoubtInfo, type GuardResult, type HumanResolution } from '../src/guard/types.js';
@@ -59,6 +59,8 @@ describe('Guard.run', () => {
     expect(result.actionId).toBe(actionId(hash, 0, START_MS));
     expect(result.outcome).toEqual(OK);
     expect(tool.calls).toEqual([result.actionId]);
+    expect(tool.keys).toEqual([result.actionId]);
+    expect(result.recorded).toBeUndefined();
     expect(ledger.states()).toEqual(['intended', 'sent', 'confirmed']);
     expect(ledger.last().detail).toEqual({ result: { ticket: 'T-1' }, result_truncated: false, delivery: 'delivered' });
     expect(ledger.last().argsJson).toBe('{"priority":2,"title":"Printer jam"}');
@@ -66,8 +68,11 @@ describe('Guard.run', () => {
 
   test('records the captured value on intended and sent', async () => {
     const { ledger, guard } = setup();
-    await guard.run(guardedCall({ captured: 'ORD-1001' }), scripted(OK).execute);
-    expect(ledger.appended.slice(0, 2).map((event) => event.detail)).toEqual([{ captured: 'ORD-1001' }, { captured: 'ORD-1001' }]);
+    const result = expectStatus(await guard.run(guardedCall({ captured: 'ORD-1001' }), scripted(OK).execute), 'executed');
+    expect(ledger.appended.slice(0, 2).map((event) => event.detail)).toEqual([
+      { captured: 'ORD-1001', idempotency_key: result.actionId ?? '' },
+      { captured: 'ORD-1001' },
+    ]);
   });
 
   test('storeArgs false keeps args out of the ledger', async () => {
@@ -81,7 +86,7 @@ describe('Guard.run', () => {
     const tool = scripted(TRANSPORT, OK);
     const first = expectStatus(await guard.run(guardedCall(), tool.execute), 'executed');
     expect(first.outcome).toEqual(TRANSPORT);
-    expect(ledger.last().detail).toEqual({ failure_kind: 'transport_error', error: 'upstream closed the connection', result: null });
+    expect(ledger.last().detail).toEqual({ failure_kind: 'transport_error', error: 'upstream closed the connection', result: null, idempotency_key: first.actionId ?? '' });
     clock.advance(119_999);
     const second = expectStatus(await guard.run(guardedCall(), tool.execute), 'in_doubt');
     expect(second.doubt).toEqual({
@@ -109,8 +114,13 @@ describe('Guard.run', () => {
   test('an error result is recorded as failed with its result', async () => {
     const { ledger, guard } = setup();
     const outcome = { kind: 'error_result', result: { isError: true, text: 'card declined' } } as const;
-    expectStatus(await guard.run(guardedCall(), scripted(outcome).execute), 'executed');
-    expect(ledger.last().detail).toEqual({ failure_kind: 'error_result', error: 'the tool returned an error result', result: outcome.result });
+    const result = expectStatus(await guard.run(guardedCall(), scripted(outcome).execute), 'executed');
+    expect(ledger.last().detail).toEqual({
+      failure_kind: 'error_result',
+      error: 'the tool returned an error result',
+      result: outcome.result,
+      idempotency_key: result.actionId ?? '',
+    });
   });
 
   test('not_dispatched failure allows an immediate retry', async () => {
@@ -150,7 +160,7 @@ describe('Guard.run', () => {
     expect(second).toEqual({ status: 'replayed', actionId: first.actionId, result: { ticket: 'T-9' }, resultTruncated: false, reason: 'replay_undelivered' });
     expect(seen).toEqual([first.actionId]);
     expect(tool.calls).toHaveLength(1);
-    expect(ledger.last().detail).toEqual({ outcome: 'happened', resolved_by: 'reconciler', result: { ticket: 'T-9' } });
+    expect(ledger.last().detail).toEqual({ outcome: 'happened', resolved_by: 'reconciler', result: { ticket: 'T-9' }, result_truncated: false });
   });
 
   test('reconciler not_happened before the settle window is treated as unknown', async () => {
@@ -176,7 +186,7 @@ describe('Guard.run', () => {
     expect(second.outcome).toEqual(OK);
     expect(tool.calls).toHaveLength(2);
     expect(ledger.states()).toEqual(['intended', 'sent', 'failed', 'reconciled', 'intended', 'sent', 'confirmed']);
-    expect(ledger.appended[3]?.detail).toEqual({ outcome: 'not_happened', resolved_by: 'reconciler', result: null });
+    expect(ledger.appended[3]?.detail).toEqual({ outcome: 'not_happened', resolved_by: 'reconciler', result: null, result_truncated: false });
     expect(ledger.last().occurrence).toBe(1);
   });
 
@@ -238,7 +248,7 @@ describe('Guard.run', () => {
     const first = expectStatus(await guard.run(call, tool.execute), 'executed');
     const second = expectStatus(await guard.run(call, tool.execute), 'replayed');
     expect(second).toMatchObject({ actionId: first.actionId, result: null, resultTruncated: false });
-    expect(ledger.last().detail).toEqual({ outcome: 'happened', resolved_by: 'human', result: null });
+    expect(ledger.last().detail).toEqual({ outcome: 'happened', resolved_by: 'human', result: null, result_truncated: false });
     expect(tool.calls).toHaveLength(1);
   });
 
@@ -354,7 +364,7 @@ describe('Guard.run', () => {
     ledger.beforeTransact = () => {
       if (ledger.transactionCount === 3) throw new (class extends Error {})('disk full');
     };
-    await expect(guard.run(guardedCall(), tool.execute)).resolves.toMatchObject({ status: 'executed', outcome: OK });
+    await expect(guard.run(guardedCall(), tool.execute)).resolves.toMatchObject({ status: 'executed', outcome: OK, recorded: false });
     ledger.beforeTransact = undefined;
     expect((await guard.run(guardedCall(), tool.execute)).status).toBe('in_doubt');
     expect(tool.calls).toHaveLength(1);
@@ -367,7 +377,7 @@ describe('Guard.run', () => {
         throw new Error('evidence disk full');
       },
     };
-    const guard = new Guard({ store: new MemoryLedgerStore(clock), clock, runInstance: 'run-1', evidence });
+    const guard = new Guard({ store: new MemoryLedgerStore(clock), clock, runInstance: 'run-1', evidence, onEvidenceError: () => {} });
     expect(await guard.run(guardedCall(), scripted(OK).execute)).toMatchObject({ status: 'executed', outcome: OK });
   });
 
@@ -412,7 +422,7 @@ describe('Guard.resolve', () => {
   test('resolve by agent happened is accepted for standard actions and the next call replays', async () => {
     const { guard, id, evidence } = await inDoubt('standard');
     const resolved = guard.resolve(id, 'happened', 'agent');
-    expect(resolved).toMatchObject({ ok: true, event: { state: 'reconciled', detail: { outcome: 'happened', resolved_by: 'agent', result: null } } });
+    expect(resolved).toMatchObject({ ok: true, event: { state: 'reconciled', detail: { outcome: 'happened', resolved_by: 'agent', result: null, result_truncated: false } } });
     expect(evidence.ofKind('resolve').at(-1)?.detail).toEqual({ outcome: 'happened', by: 'agent', ok: true });
     const tool = scripted(OK);
     expect((await guard.run(guardedCall({ tool: 'tool_standard' }), tool.execute)).status).toBe('replayed');
@@ -479,5 +489,198 @@ describe('Guard.wrap', () => {
     });
     await expect(blockedCall({ n: 1 })).rejects.toBe(failure);
     await expect(blockedCall({ n: 1 })).rejects.toMatchObject({ blocked: true });
+  });
+});
+
+describe('Guard with two processes on one ledger', () => {
+  function twoGuards() {
+    const clock = new ManualClock(START_MS);
+    const store = new RecordingStore(new MemoryLedgerStore(clock));
+    const a = new Guard({ store, clock, runInstance: 'proc-a', evidence: new RecordingSink() });
+    const b = new Guard({ store, clock, runInstance: 'proc-b', evidence: new RecordingSink() });
+    return { clock, store, a, b };
+  }
+
+  test('a late failed outcome never overwrites a resolution made meanwhile', async () => {
+    const { clock, store, a, b } = twoGuards();
+    const call = guardedCall({ sessionExplicit: true });
+    let effects = 0;
+    const gate = deferred<void>();
+    const inFlight = a.run(call, async () => {
+      effects += 1;
+      await gate.promise;
+      return TRANSPORT;
+    });
+    clock.advance(15_000);
+    const doubt = expectStatus(await b.run(call, scripted(OK).execute), 'in_doubt');
+    expect(b.resolve(doubt.doubt.actionId, 'happened', 'agent').ok).toBe(true);
+    gate.resolve();
+    expect((await inFlight).status).toBe('executed');
+    expect(store.last()).toMatchObject({ state: 'reconciled', detail: { outcome: 'happened' } });
+    clock.advance(120_000);
+    const late = await a.run(call, async () => {
+      effects += 1;
+      return OK;
+    });
+    expect(late.status).toBe('replayed');
+    expect(effects).toBe(1);
+  });
+
+  test('a slow human answer never becomes a repeat when another process resolved meanwhile', async () => {
+    const clock = new ManualClock(START_MS);
+    const store = new MemoryLedgerStore(clock);
+    const answer = deferred<HumanResolution>();
+    const a = new Guard({ store, clock, runInstance: 'proc-a', evidence: new RecordingSink() });
+    const b = new Guard({ store, clock, runInstance: 'proc-b', evidence: new RecordingSink(), humanResolver: { resolve: () => answer.promise } });
+    const call = guardedCall({ policy: 'block-on-doubt', toolClass: 'money' });
+    const tool = scripted(TRANSPORT, OK);
+    const first = expectStatus(await a.run(call, tool.execute), 'executed');
+    clock.advance(1_000);
+    const waiting = b.run(call, tool.execute);
+    expect(a.resolve(first.actionId ?? '', 'happened', 'human').ok).toBe(true);
+    clock.advance(200_000);
+    answer.resolve('happened');
+    expect((await waiting).status).toBe('replayed');
+    expect(tool.calls).toHaveLength(1);
+  });
+
+  test('a late confirmed outcome is always recorded', async () => {
+    const { clock, store, a, b } = twoGuards();
+    const call = guardedCall({ sessionExplicit: true });
+    const gate = deferred<void>();
+    const inFlight = a.run(call, async () => {
+      await gate.promise;
+      return OK;
+    });
+    clock.advance(15_000);
+    const doubt = expectStatus(await b.run(call, scripted(OK).execute), 'in_doubt');
+    expect(b.resolve(doubt.doubt.actionId, 'happened', 'agent').ok).toBe(true);
+    gate.resolve();
+    await inFlight;
+    expect(store.last()).toMatchObject({ state: 'confirmed', detail: { result: { ticket: 'T-1' } } });
+  });
+});
+
+describe('Guard review fixes', () => {
+  test('a reconciled result over maxResultBytes replays as truncated', async () => {
+    const { ledger, guard } = setup({ maxResultBytes: 64 });
+    const tool = scripted(TRANSPORT, OK);
+    await guard.run(guardedCall(), tool.execute);
+    const reconciler = async () => ({ outcome: 'happened', result: { image: 'x'.repeat(100) } }) as const;
+    const replay = expectStatus(await guard.run(guardedCall({ reconciler }), tool.execute), 'replayed');
+    expect(replay).toMatchObject({ result: null, resultTruncated: true });
+    expect(ledger.last().detail).toEqual({ outcome: 'happened', resolved_by: 'reconciler', result: null, result_truncated: true });
+  });
+
+  test('a result that cannot be canonicalized is recorded as a result error, not truncated', async () => {
+    const { ledger, guard } = setup();
+    const outcome = { kind: 'ok', result: { ratio: Number.NaN } } as const;
+    const result = expectStatus(await guard.run(guardedCall(), scripted(outcome).execute), 'executed');
+    expect(result.outcome).toBe(outcome);
+    expect(ledger.last().detail).toEqual({
+      result: null,
+      result_truncated: false,
+      result_error: 'cannot canonicalize the non-finite number NaN at $.ratio',
+      delivery: 'delivered',
+    });
+  });
+
+  test('evidence sink failures reach onEvidenceError', async () => {
+    const clock = new ManualClock(START_MS);
+    const failure = new Error('evidence disk full');
+    const seen: Array<{ error: unknown; kind: string }> = [];
+    const guard = new Guard({
+      store: new MemoryLedgerStore(clock),
+      clock,
+      runInstance: 'run-1',
+      evidence: {
+        emit: () => {
+          throw failure;
+        },
+      },
+      onEvidenceError: (error, event) => {
+        seen.push({ error, kind: event.kind });
+      },
+    });
+    expect(await guard.run(guardedCall(), scripted(OK).execute)).toMatchObject({ status: 'executed', outcome: OK });
+    expect(seen.map((entry) => entry.kind)).toEqual(['decision', 'state', 'state', 'state']);
+    expect(seen.every((entry) => entry.error === failure)).toBe(true);
+  });
+
+  test('evidence sink failures go to stderr by default', async () => {
+    const clock = new ManualClock(START_MS);
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const evidence = {
+        emit: () => {
+          throw new Error('evidence disk full');
+        },
+      };
+      const guard = new Guard({ store: new MemoryLedgerStore(clock), clock, runInstance: 'run-1', evidence });
+      await guard.run(guardedCall(), scripted(OK).execute);
+      expect(write).toHaveBeenCalledWith('agent-once: evidence sink failed: evidence disk full\n');
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  test('a late retry after the window reuses the idempotency key', async () => {
+    const { clock, guard } = setup();
+    const tool = scripted(TRANSPORT, TRANSPORT, OK);
+    const first = expectStatus(await guard.run(guardedCall(), tool.execute), 'executed');
+    clock.advance(120_000);
+    await guard.run(guardedCall(), tool.execute);
+    clock.advance(120_000);
+    await guard.run(guardedCall(), tool.execute);
+    expect(new Set(tool.calls).size).toBe(3);
+    expect(tool.keys).toEqual([first.actionId, first.actionId, first.actionId]);
+  });
+
+  test('a retry after not_dispatched reuses the idempotency key', async () => {
+    const { guard } = setup();
+    const tool = scripted({ kind: 'not_dispatched', error: 'stale ref' }, OK);
+    const first = expectStatus(await guard.run(guardedCall(), tool.execute), 'executed');
+    await guard.run(guardedCall(), tool.execute);
+    expect(tool.keys).toEqual([first.actionId, first.actionId]);
+  });
+
+  test('a late retry the reconciler cannot settle reuses the idempotency key', async () => {
+    const { clock, guard } = setup();
+    const tool = scripted(TRANSPORT, OK);
+    const first = expectStatus(await guard.run(guardedCall(), tool.execute), 'executed');
+    clock.advance(120_000);
+    const reconciler = async () => ({ outcome: 'unknown', reason: 'no status endpoint' }) as const;
+    await guard.run(guardedCall({ reconciler }), tool.execute);
+    expect(tool.keys).toEqual([first.actionId, first.actionId]);
+  });
+
+  test('a deliberate repeat and a reconciled not_happened get a fresh idempotency key', async () => {
+    const { clock, guard } = setup();
+    const tool = scripted(OK, TRANSPORT, OK);
+    await guard.run(guardedCall(), tool.execute);
+    await guard.run(guardedCall(), tool.execute);
+    clock.advance(10_000);
+    await guard.run(guardedCall({ reconciler: async () => ({ outcome: 'not_happened' }) }), tool.execute);
+    expect(tool.keys).toEqual(tool.calls);
+    expect(new Set(tool.keys).size).toBe(3);
+  });
+
+  test('a settle window longer than the retry window is rejected', () => {
+    const clock = new ManualClock(START_MS);
+    expect(
+      () => new Guard({ store: new MemoryLedgerStore(clock), clock, runInstance: 'run-1', evidence: new RecordingSink(), retryWindowMs: 5_000, settleWindowMs: 5_001 }),
+    ).toThrow(RangeError);
+  });
+
+  test('resolve reports an unavailable ledger as a result', () => {
+    const clock = new ManualClock(START_MS);
+    const store = new MemoryLedgerStore(clock);
+    store.close();
+    const guard = new Guard({ store, clock, runInstance: 'run-1', evidence: new RecordingSink() });
+    expect(guard.resolve('ao_000000000000000000000000', 'happened', 'human')).toEqual({
+      ok: false,
+      reason: 'ledger_unavailable',
+      error: 'agent-once ledger unavailable: the ledger is closed',
+    });
   });
 });

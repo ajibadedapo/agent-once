@@ -142,14 +142,16 @@ intended | sent | failed -> reconciled
 
 | State | Meaning | `detail_json` keys |
 |---|---|---|
-| `intended` | Claimed, not yet dispatched | `captured?` (string) |
+| `intended` | Claimed, not yet dispatched | `idempotency_key` (string); `captured?` (string) |
 | `sent` | Dispatch started; the outcome is unknown until a later event | `captured?` (string) |
-| `confirmed` | The tool returned a success result | `result`, `result_truncated` (boolean), `delivery`: `"delivered"` or `"cancelled"` |
-| `failed` | The tool returned an error or the transport failed | `failure_kind`: `"error_result"`, `"transport_error"` or `"not_dispatched"`; `error` (string); `result` (JSON or null) |
-| `reconciled` | The outcome was established after doubt | `outcome`: `"happened"` or `"not_happened"`; `resolved_by`: `"reconciler"`, `"agent"`, `"human"` or `"webhook"`; `result` (JSON or null) |
+| `confirmed` | The tool returned a success result | `result`, `result_truncated` (boolean), `result_error?` (string), `delivery`: `"delivered"` or `"cancelled"` |
+| `failed` | The tool returned an error or the transport failed | `failure_kind`: `"error_result"`, `"transport_error"` or `"not_dispatched"`; `error` (string); `result` (JSON or null); `result_error?` (string); `idempotency_key` (string) |
+| `reconciled` | The outcome was established after doubt | `outcome`: `"happened"` or `"not_happened"`; `resolved_by`: `"reconciler"`, `"agent"`, `"human"` or `"webhook"`; `result` (JSON or null); `result_truncated` (boolean); `result_error?` (string) |
 
 - `captured` is a value read from the environment before dispatch (for example an order reference on the page) for later reconciliation.
-- A result whose UTF-8 JSON exceeds the stored result cap is stored as `null` with `result_truncated: true`. A replay of it reports that the effect is confirmed but the result was too large to keep.
+- A result whose UTF-8 JSON exceeds the stored result cap is stored as `null` with `result_truncated: true`, for `confirmed` and `reconciled` alike. A replay of it reports that the effect is confirmed but the result was too large to keep. A result that cannot be canonicalized (section 2) is stored as `null` with `result_truncated: false` and the canonicalization error message in `result_error`.
+- `idempotency_key` is the key the guard forwards upstream (for example as the HTTP `Idempotency-Key` header). An occurrence decided `failed_after_window` or `not_dispatched` inherits the `idempotency_key` of the previous occurrence, read from its `failed` event (falling back to that event's `action_id` when the key is absent), so the upstream service can deduplicate the guard's own late retries. Every other occurrence uses its own `action_id`. `failed` repeats the occurrence's key for that purpose.
+- `failed` is appended only if the latest event of the intent is still the `sent` event of the same dispatch, checked in the same transaction; a failure that arrives after a resolution or a newer occurrence is dropped. `confirmed` is always appended, because a success observed from the tool is stronger evidence than any earlier resolution.
 - `delivery: "cancelled"` means the effect completed but the caller had gone (for example the client cancelled the request) and never received the result.
 - `not_dispatched` means the tool provably did not perform the effect (for example a stale element reference rejected before any action).
 
@@ -183,9 +185,15 @@ The latest event for an intent is the event with the highest `seq` among the eve
 
 In-doubt handling belongs to the guard, not to `decide`:
 
-1. Run the tool's reconciler, if any. `happened` is accepted at once. `not_happened` is accepted only when `now - at_ms(sent) >= settle window`; earlier it is treated as unknown with reason `too_soon`. An accepted outcome is appended as a `reconciled` event with `resolved_by: "reconciler"`; `happened` then replays and `not_happened` executes the next occurrence.
+1. Run the tool's reconciler, if any. `happened` is accepted at once. `not_happened` is accepted only when `now - at_ms(latest in-doubt event) >= settle window`, where the latest in-doubt event of the occurrence is its `sent` event, or a later `failed` or `intended` event (the later time is conservative). Earlier it is treated as unknown with reason `too_soon`. An accepted outcome is appended as a `reconciled` event with `resolved_by: "reconciler"`, only if the latest event is unchanged, in the same transaction as the next decision; `happened` then replays and `not_happened` executes the next occurrence.
 2. Otherwise, policy `guard` returns in doubt: the outcome is unknown and the agent may resolve it.
 3. Policy `block-on-doubt` (the default for classes `money` and `irreversible`) asks the human resolver chain (elicitation, then webhook). If nobody resolves it, the call is blocked.
+
+A reconciler is also consulted before a late retry: when `decide` returns `failed_after_window` and the tool has a reconciler, the guard runs it first. `happened` is recorded and replays, `not_happened` is recorded and executes the next occurrence (`reconciled_not_happened`), and `unknown` executes the next occurrence as `failed_after_window`.
+
+A call that waits (for a reconciler or a human) and then decides again evaluates the decision table with `now` set to the time the call arrived. A slow answer therefore never turns into a `deliberate_repeat` or a `failed_after_window` because time passed while the call itself was waiting. Settle-window checks and event times use the current time.
+
+The settle window must not be longer than the retry window.
 
 Resolution rules:
 

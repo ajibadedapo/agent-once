@@ -95,9 +95,25 @@ describe('OtelEvidenceSink', () => {
     expect(() => new OtelEvidenceSink(api).emit(event())).not.toThrow();
   });
 
+  test('base attributes win over detail keys with the same name', () => {
+    const recorded: Array<Record<string, string | number | boolean>> = [];
+    const api: OtelTraceApi = { trace: { getActiveSpan: () => ({ addEvent: (_name, attributes) => recorded.push(attributes) }) } };
+    new OtelEvidenceSink(api).emit(event({ detail: { tool: 'spoofed', v: 9 } }));
+    expect(recorded[0]?.['agent_once.tool']).toBe('place_order');
+    expect(recorded[0]?.['agent_once.v']).toBe(1);
+  });
+
+  test('create rethrows import failures other than a missing module', async () => {
+    await expect(
+      OtelEvidenceSink.create(async () => {
+        throw new SyntaxError('broken module');
+      }),
+    ).rejects.toThrow('broken module');
+  });
+
   test('is a no-op when the OpenTelemetry API cannot be imported', async () => {
     const sink = await OtelEvidenceSink.create(async () => {
-      throw new Error('Cannot find package @opentelemetry/api');
+      throw Object.assign(new Error('Cannot find package @opentelemetry/api'), { code: 'ERR_MODULE_NOT_FOUND' });
     });
     expect(sink.active).toBe(false);
     expect(() => sink.emit(event())).not.toThrow();

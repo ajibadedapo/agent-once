@@ -12,8 +12,14 @@ const OTEL_API_PACKAGE = '@opentelemetry/api';
 const PREFIX = 'agent_once.';
 
 async function importOtelApi(): Promise<OtelTraceApi> {
-  const specifier: string = OTEL_API_PACKAGE;
-  return (await import(specifier)) as OtelTraceApi;
+  const location = import.meta.resolve(OTEL_API_PACKAGE);
+  return (await import(location)) as OtelTraceApi;
+}
+
+const MODULE_NOT_FOUND_CODES: ReadonlySet<unknown> = new Set(['ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND']);
+
+function isModuleNotFound(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && MODULE_NOT_FOUND_CODES.has(error.code);
 }
 
 function toAttribute(value: unknown): AttributeValue {
@@ -27,8 +33,9 @@ export class OtelEvidenceSink implements EvidenceSink {
   static async create(load: () => Promise<OtelTraceApi> = importOtelApi): Promise<OtelEvidenceSink> {
     try {
       return new OtelEvidenceSink(await load());
-    } catch {
-      return new OtelEvidenceSink();
+    } catch (error) {
+      if (isModuleNotFound(error)) return new OtelEvidenceSink();
+      throw error;
     }
   }
 
@@ -39,14 +46,13 @@ export class OtelEvidenceSink implements EvidenceSink {
   emit(event: EvidenceEvent): void {
     const span = this.api?.trace.getActiveSpan();
     if (span === undefined) return;
-    const attributes: Record<string, AttributeValue> = {
-      [`${PREFIX}v`]: event.v,
-      [`${PREFIX}at_ms`]: event.atMs,
-    };
+    const attributes: Record<string, AttributeValue> = {};
+    for (const [key, value] of Object.entries(event.detail)) attributes[`${PREFIX}${key}`] = toAttribute(value);
+    attributes[`${PREFIX}v`] = event.v;
+    attributes[`${PREFIX}at_ms`] = event.atMs;
     if (event.actionId !== undefined) attributes[`${PREFIX}action_id`] = event.actionId;
     attributes[`${PREFIX}tool`] = event.tool;
     attributes[`${PREFIX}session_key`] = event.sessionKey;
-    for (const [key, value] of Object.entries(event.detail)) attributes[`${PREFIX}${key}`] = toAttribute(value);
     span.addEvent(`${PREFIX}${event.kind}`, attributes);
   }
 }

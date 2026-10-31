@@ -52,12 +52,13 @@ export interface GuardedCall {
 
 export interface ExecuteContext {
   actionId?: string;
+  idempotencyKey?: string;
 }
 
 export type Execute = (context: ExecuteContext) => Promise<ToolOutcome>;
 
 export type GuardResult =
-  | { status: 'executed' | 'passed'; actionId?: string; outcome: ToolOutcome }
+  | { status: 'executed' | 'passed'; actionId?: string; outcome: ToolOutcome; recorded?: false }
   | { status: 'replayed'; actionId: string; result: JsonValue | null; resultTruncated: boolean; reason: string }
   | { status: 'in_doubt' | 'blocked'; doubt: DoubtInfo }
   | { status: 'ledger_unavailable'; error: string };
@@ -66,7 +67,8 @@ export type ResolvedBy = 'agent' | 'human' | 'webhook';
 
 export type ResolveResult =
   | { ok: true; event: LedgerEvent }
-  | { ok: false; reason: 'unknown_action' | 'not_in_doubt' | 'agent_cannot_resolve_class' | 'too_soon' };
+  | { ok: false; reason: 'unknown_action' | 'not_in_doubt' | 'agent_cannot_resolve_class' | 'too_soon' }
+  | { ok: false; reason: 'ledger_unavailable'; error: string };
 
 export class ActionInDoubtError extends Error {
   override readonly name: string = 'ActionInDoubtError';

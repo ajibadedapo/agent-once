@@ -10,10 +10,12 @@ export async function guardedFetch(
   init: RequestInit = {},
   fetchImpl: typeof fetch = fetch,
 ): Promise<GuardResult> {
-  return guard.run(call, async ({ actionId }): Promise<ToolOutcome> => {
+  const signals = [init.signal, call.signal].filter((signal): signal is AbortSignal => signal !== undefined && signal !== null);
+  const signal = signals.length > 1 ? AbortSignal.any(signals) : signals[0];
+  return guard.run(call, async ({ idempotencyKey }): Promise<ToolOutcome> => {
     const headers = new Headers(init.headers);
-    if (actionId !== undefined && !headers.has(IDEMPOTENCY_KEY_HEADER)) headers.set(IDEMPOTENCY_KEY_HEADER, actionId);
-    const response = await fetchImpl(input, { ...init, headers });
+    if (idempotencyKey !== undefined && !headers.has(IDEMPOTENCY_KEY_HEADER)) headers.set(IDEMPOTENCY_KEY_HEADER, idempotencyKey);
+    const response = await fetchImpl(input, { ...init, headers, ...(signal === undefined ? {} : { signal }) });
     const result = { status: response.status, body: await response.text() };
     return response.ok ? { kind: 'ok', result } : { kind: 'error_result', result };
   });

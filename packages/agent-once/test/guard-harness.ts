@@ -1,5 +1,5 @@
 import type { EvidenceEvent, EvidenceSink } from '../src/evidence/types.js';
-import type { GuardedCall, ToolOutcome } from '../src/guard/types.js';
+import type { ExecuteContext, GuardedCall, ToolOutcome } from '../src/guard/types.js';
 import type { LedgerEvent, LedgerStore, LedgerTx } from '../src/ledger/types.js';
 
 export const START_MS = 1_761_912_345_678;
@@ -80,12 +80,19 @@ export function guardedCall(overrides: Partial<GuardedCall> = {}): GuardedCall {
   };
 }
 
-export function scripted(...outcomes: ToolOutcome[]): { execute: (context: { actionId?: string }) => Promise<ToolOutcome>; calls: Array<string | undefined> } {
+export function scripted(...outcomes: ToolOutcome[]): {
+  execute: (context: ExecuteContext) => Promise<ToolOutcome>;
+  calls: Array<string | undefined>;
+  keys: Array<string | undefined>;
+} {
   const calls: Array<string | undefined> = [];
+  const keys: Array<string | undefined> = [];
   return {
     calls,
+    keys,
     execute: async (context) => {
       calls.push(context.actionId);
+      keys.push(context.idempotencyKey);
       const outcome = outcomes[Math.min(calls.length - 1, outcomes.length - 1)];
       if (outcome === undefined) throw new Error('no scripted outcome');
       return outcome;

@@ -14,7 +14,7 @@ function setup() {
       requests.push({ url: String(input), headers: new Headers(init?.headers), method: init?.method });
       return response();
     }) as typeof fetch;
-  return { guard, requests, respond };
+  return { clock, guard, requests, respond };
 }
 
 const call = guardedCall({ tool: 'POST /orders', args: { sku: 'A-1', qty: 1 }, toolClass: 'money' });
@@ -56,5 +56,37 @@ describe('guardedFetch', () => {
     const second = await guardedFetch(guard, call, 'https://shop.test/orders', {}, flaky);
     expect(second.status).toBe('in_doubt');
     expect(attempts).toBe(1);
+  });
+
+  test('a late retry after the window sends the same Idempotency-Key', async () => {
+    const { clock, guard, requests } = setup();
+    let attempt = 0;
+    const flakyThenOk = (async (input: string | URL | Request, init?: RequestInit) => {
+      requests.push({ url: String(input), headers: new Headers(init?.headers), method: init?.method });
+      attempt += 1;
+      if (attempt === 1) throw new TypeError('fetch failed');
+      return new Response('ok');
+    }) as typeof fetch;
+    await guardedFetch(guard, call, 'https://shop.test/orders', {}, flakyThenOk);
+    clock.advance(120_000);
+    const second = await guardedFetch(guard, call, 'https://shop.test/orders', {}, flakyThenOk);
+    expect(second.status).toBe('executed');
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.headers.get('idempotency-key')).toBe(requests[0]?.headers.get('idempotency-key'));
+  });
+
+  test('links the call signal into the request signal', async () => {
+    const { guard } = setup();
+    const controller = new AbortController();
+    let seen: AbortSignal | undefined;
+    const capture = (async (_input: string | URL | Request, init?: RequestInit) => {
+      seen = init?.signal ?? undefined;
+      return new Response('ok');
+    }) as typeof fetch;
+    const own = new AbortController();
+    await guardedFetch(guard, { ...call, signal: controller.signal }, 'https://shop.test/orders', { signal: own.signal }, capture);
+    expect(seen?.aborted).toBe(false);
+    controller.abort();
+    expect(seen?.aborted).toBe(true);
   });
 });

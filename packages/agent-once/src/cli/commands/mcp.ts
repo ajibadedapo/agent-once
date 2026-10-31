@@ -48,8 +48,7 @@ export async function runMcp(args: string[], io: CliIo): Promise<number> {
     proxy = await createProxy({
       client: new StdioServerTransport(),
       upstream,
-      guard: (humanResolver) =>
-        new Guard({ store, clock: systemClock, runInstance, evidence: evidenceSink(config), humanResolver, ...guardSettings(config) }),
+      guard: () => new Guard({ store, clock: systemClock, runInstance, evidence: evidenceSink(config), ...guardSettings(config) }),
       config,
       clock: systemClock,
       cwd: io.cwd,

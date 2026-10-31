@@ -79,7 +79,7 @@ export function upstreamExitedResult(tool: string, actionId: string | undefined,
 
 export function callFailedResult(tool: string, actionId: string | undefined, error: string): CallToolResult {
   const subject = actionId === undefined ? `this ${tool} call` : `this ${tool} call (action ${actionId})`;
-  return errorResult(`agent-once: ${subject} failed: ${error}`, actionId === undefined ? undefined : statusMeta('executed', actionId));
+  return errorResult(`agent-once: ${subject} failed: ${error}`);
 }
 
 export function resolveRecordedResult(actionId: string, outcome: 'happened' | 'not_happened'): CallToolResult {

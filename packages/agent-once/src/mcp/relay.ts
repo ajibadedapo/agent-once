@@ -4,10 +4,12 @@ export const PROXY_ID_PREFIX = 'agent-once:';
 
 export type RpcResponse = { kind: 'result'; result: Record<string, unknown> } | { kind: 'error'; error: { code: number; message: string; data?: unknown } };
 
+export type ClosedResponse = RpcResponse | { kind: 'abandoned' };
+
 interface Pending {
-  settle: (response: RpcResponse) => void;
+  settle: (response: ClosedResponse) => void;
   fail: (error: Error) => void;
-  survivesClose: boolean;
+  abandonOnClose: boolean;
 }
 
 export class UpstreamClosedError extends Error {
@@ -32,6 +34,10 @@ export function responseOf(message: JSONRPCMessage): RpcResponse {
   return { kind: 'error', error: { code: -32603, message: 'malformed response' } };
 }
 
+export function isReservedId(id: unknown): boolean {
+  return typeof id === 'string' && id.startsWith(PROXY_ID_PREFIX);
+}
+
 export function idKey(id: RequestId): string {
   return typeof id === 'string' ? `s:${id}` : `n:${id}`;
 }
@@ -47,9 +53,15 @@ export class Correlator {
     return `${PROXY_ID_PREFIX}${this.channel}-${this.next}`;
   }
 
-  expect(id: string, options: { survivesClose?: boolean } = {}): Promise<RpcResponse> {
+  expect(id: string): Promise<RpcResponse> {
     return new Promise((settle, fail) => {
-      this.pending.set(id, { settle, fail, survivesClose: options.survivesClose === true });
+      this.pending.set(id, { settle: settle as (response: ClosedResponse) => void, fail, abandonOnClose: false });
+    });
+  }
+
+  expectOrAbandon(id: string): Promise<ClosedResponse> {
+    return new Promise((settle, fail) => {
+      this.pending.set(id, { settle, fail, abandonOnClose: true });
     });
   }
 
@@ -67,10 +79,11 @@ export class Correlator {
   }
 
   close(error: Error): void {
-    for (const [id, pending] of this.pending) {
-      if (pending.survivesClose) continue;
-      this.pending.delete(id);
-      pending.fail(error);
+    const closing = [...this.pending.values()];
+    this.pending.clear();
+    for (const pending of closing) {
+      if (pending.abandonOnClose) pending.settle({ kind: 'abandoned' });
+      else pending.fail(error);
     }
   }
 }

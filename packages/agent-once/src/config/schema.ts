@@ -236,7 +236,7 @@ function parseToolRule(reader: Reader, raw: unknown, path: string): ToolRule {
 
 function parseTools(reader: Reader, raw: unknown): Record<string, ToolRule> {
   const fields = reader.object(raw ?? {}, '/tools');
-  const tools: Record<string, ToolRule> = {};
+  const tools: Record<string, ToolRule> = Object.create(null) as Record<string, ToolRule>;
   for (const [name, rule] of Object.entries(fields)) {
     const path = pointer('/tools', name);
     if (name === '') reader.fail(path, 'a tool name or glob must not be empty');

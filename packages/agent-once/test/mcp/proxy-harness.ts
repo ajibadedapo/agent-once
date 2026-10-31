@@ -75,7 +75,7 @@ export interface ProxyOptions {
   runInstance?: string;
   capabilities?: ClientCapabilities;
   extensions?: ProxyExtension[];
-  humanResolverFactory?: (ctx: ProxyContext) => HumanResolver | undefined;
+  humanResolver?: (ctx: ProxyContext) => HumanResolver;
   clientName?: string;
 }
 
@@ -103,13 +103,13 @@ export async function startProxy(workspace: Workspace, options: ProxyOptions = {
   const proxy = await createProxy({
     client: proxySide,
     upstream,
-    guard: (humanResolver) =>
+    guard: (ctx) =>
       new Guard({
         store: options.wrapStore?.(store) ?? store,
         clock: workspace.clock,
         runInstance: options.runInstance ?? 'run-1',
         evidence: sink,
-        humanResolver,
+        ...(options.humanResolver === undefined ? {} : { humanResolver: options.humanResolver(ctx) }),
         retryWindowMs: config.ledger.retryWindowSeconds * 1000,
         settleWindowMs: config.ledger.settleSeconds * 1000,
       }),
@@ -118,7 +118,6 @@ export async function startProxy(workspace: Workspace, options: ProxyOptions = {
     cwd: '/work',
     env: options.env ?? {},
     extensions: options.extensions,
-    humanResolverFactory: options.humanResolverFactory,
     log: (message) => logs.push(message),
   });
   const client = new Client({ name: options.clientName ?? 'test-client', version: '1.0.0' }, { capabilities: options.capabilities ?? {} });

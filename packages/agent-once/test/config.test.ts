@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import { loadConfig } from '../src/config/load.js';
 import { ConfigError } from '../src/config/schema.js';
+import { findToolRule } from '../src/mcp/tool-policy.js';
 
 const tempDirs: string[] = [];
 
@@ -133,6 +134,16 @@ describe('loadConfig', () => {
     expect(configError(JSON.stringify({ tools: { '': { policy: 'pass' } } })).path).toBe('/tools/');
     expect(configError(JSON.stringify({ approvalWebhook: { url: 'ftp://x' } })).path).toBe('/approvalWebhook/url');
     expect(configError(JSON.stringify({ browser: { enabled: 'maybe' } })).path).toBe('/browser/enabled');
+  });
+
+  test('a tool named __proto__ is an ordinary rule and cannot change the rules object', () => {
+    const { dir, file } = writeConfig('{ "tools": { "__proto__": { "policy": "pass" }, "send_*": { "policy": "guard" } } }');
+    const config = loadConfig({ path: file, cwd: dir, env: {}, homedir: '/home/user' });
+    expect(Object.getPrototypeOf(config.tools)).toBeNull();
+    expect(Object.keys(config.tools)).toEqual(['__proto__', 'send_*']);
+    expect(findToolRule('__proto__', config)).toEqual({ policy: 'pass' });
+    expect(findToolRule('send_mail', config)).toEqual({ policy: 'guard' });
+    expect(findToolRule('toString', config)).toBeUndefined();
   });
 
   test('a missing config file is a ConfigError', () => {

@@ -8,6 +8,7 @@ const ACTION_META_KEY = 'io.github.ajibadedapo/agent-once-action';
 const statePath = process.env.COUNTER_STATE;
 const pageSize = Number(process.env.COUNTER_PAGE_SIZE ?? '0');
 const crashCode = Number(process.env.COUNTER_CRASH_CODE ?? '7');
+const rootsInList = process.env.COUNTER_ROOTS_IN_LIST === '1';
 
 function emptyState() {
   return { count: 0, rejections: 0, cancelledSeen: 0, cancelNotices: 0, rootsChanged: 0, actionKeys: [] };
@@ -137,6 +138,19 @@ server.registerTool('emit_log', { description: 'Sends a log notification.', anno
   return text('logged');
 });
 
+server.registerTool('ask_roots', { description: 'Asks the client for its roots.' }, async () => {
+  const { roots } = await server.server.listRoots();
+  return text(JSON.stringify(roots));
+});
+
+server.registerTool('progress_work', { description: 'Reports progress, then answers.' }, async (extra) => {
+  const progressToken = extra._meta?.progressToken;
+  if (progressToken !== undefined) {
+    await extra.sendNotification({ method: 'notifications/progress', params: { progressToken, progress: 1, total: 2, message: 'halfway' } });
+  }
+  return text('worked');
+});
+
 server.registerResource('about', 'counter://about', { mimeType: 'text/plain' }, async (uri) => ({
   contents: [{ uri: uri.href, mimeType: 'text/plain', text: 'counter fixture' }],
 }));
@@ -155,10 +169,12 @@ server.server['_notificationHandlers'].set('notifications/cancelled', async (not
   return onCancelled?.(notification);
 });
 
-if (pageSize > 0) {
+if (pageSize > 0 || rootsInList) {
   const listTools = server.server['_requestHandlers'].get('tools/list');
   server.server['_requestHandlers'].set('tools/list', async (request, extra) => {
+    if (rootsInList) await server.server.listRoots();
     const all = await listTools(request, extra);
+    if (pageSize === 0) return all;
     const start = Number(request.params?.cursor ?? '0');
     const end = start + pageSize;
     return { tools: all.tools.slice(start, end), ...(end < all.tools.length ? { nextCursor: String(end) } : {}) };

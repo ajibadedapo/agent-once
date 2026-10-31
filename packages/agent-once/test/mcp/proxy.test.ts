@@ -205,8 +205,10 @@ describe('guarded tools/call', () => {
   });
 
   test('upstream crash mid-call leaves the action sent, answers the client with an error and closed resolves with the exit code', async () => {
-    const { client, store, proxy } = await startProxy(workspace);
+    const { client, store, proxy, sink } = await startProxy(workspace);
+    const abandoned = sink.next((event) => event.kind === 'state' && event.detail.state === 'abandoned');
     const result = (await client.callTool({ name: 'crash_during', arguments: {} })) as CallToolResult;
+    expect((await abandoned).tool).toBe('crash_during');
     expect(result.isError).toBe(true);
     expect(textOf(result)).toContain('exited');
     expect(await proxy.closed).toEqual({ upstreamExitCode: 7 });
@@ -310,6 +312,37 @@ describe('guarded tools/call', () => {
   });
 });
 
+describe('upstream-initiated traffic', () => {
+  test('an upstream request to the client is relayed, also while a tools/list prefetch is waiting on it', async () => {
+    const { client } = await startProxy(workspace, { capabilities: { roots: {} }, upstreamEnv: { COUNTER_ROOTS_IN_LIST: '1' } });
+    client.setRequestHandler(ListRootsRequestSchema, async () => ({ roots: [{ uri: 'file:///work', name: 'work' }] }));
+    const result = await client.callTool({ name: 'ask_roots', arguments: {} });
+    expect(statusOf(result)?.status).toBe('executed');
+    expect(JSON.parse(textOf(result))).toEqual([{ uri: 'file:///work', name: 'work' }]);
+  });
+
+  test('progress notifications for a guarded call reach the client', async () => {
+    const { client } = await startProxy(workspace);
+    const progress: unknown[] = [];
+    const result = await client.callTool({ name: 'progress_work', arguments: {} }, undefined, { onprogress: (update) => progress.push(update) });
+    expect(statusOf(result)?.status).toBe('executed');
+    expect(progress).toEqual([{ progress: 1, total: 2, message: 'halfway' }]);
+  });
+
+  test('identical guarded calls in flight together dispatch once and both get the result', async () => {
+    const { client } = await startProxy(workspace);
+    const first = client.callTool({ name: 'slow', arguments: {} });
+    await client.callTool({ name: 'slow_started', arguments: {} });
+    const second = client.callTool({ name: 'slow', arguments: {} });
+    await client.callTool({ name: 'release', arguments: {} });
+    const [a, b] = await Promise.all([first, second]);
+    expect(textOf(a)).toBe('slow done');
+    expect(textOf(b)).toBe('slow done');
+    expect(statusOf(b)).toEqual(statusOf(a));
+    expect((await stats(client)).count).toBe(1);
+  });
+});
+
 describe('doubt delivery seam', () => {
   test('a money action in doubt is blocked without a human resolver', async () => {
     const { client } = await startProxy(workspace);
@@ -323,13 +356,15 @@ describe('doubt delivery seam', () => {
     expect((await stats(client)).count).toBe(1);
   });
 
-  test('the human resolver factory sees the client capabilities and its answer is applied', async () => {
+  test('the human resolver reads the client capabilities through the live context at resolve time', async () => {
     const seen: unknown[] = [];
-    const humanResolverFactory = (ctx: ProxyContext): HumanResolver => {
-      seen.push(ctx.clientCapabilities.elicitation);
-      return { resolve: async () => 'happened' };
-    };
-    const { client } = await startProxy(workspace, { capabilities: { elicitation: {} }, humanResolverFactory });
+    const humanResolver = (ctx: ProxyContext): HumanResolver => ({
+      resolve: async () => {
+        seen.push(ctx.clientCapabilities.elicitation);
+        return 'happened';
+      },
+    });
+    const { client } = await startProxy(workspace, { capabilities: { elicitation: {} }, humanResolver });
     await client.callTool({ name: 'charge', arguments: { amount: 10, fail: true } });
     const retry = await client.callTool({ name: 'charge', arguments: { amount: 10, fail: true } });
     expect(statusOf(retry)?.status).toBe('replayed');

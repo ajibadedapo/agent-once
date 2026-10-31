@@ -11,10 +11,10 @@ import type {
 import { CanonicalizationError, type JsonValue } from '../canonical/jcs.js';
 import type { AgentOnceConfig } from '../config/schema.js';
 import type { Guard } from '../guard/guard.js';
-import type { ExecuteContext, GuardResult, GuardedCall, HumanResolver, Reconciler, ToolOutcome } from '../guard/types.js';
+import type { ExecuteContext, GuardResult, GuardedCall, Reconciler, ToolOutcome } from '../guard/types.js';
 import type { Clock } from '../time/clock.js';
 import { ACTION_META_KEY, INTENT_META_KEY, metaString } from './meta.js';
-import { Correlator, idKey, isNotification, isRequest, isResponse, UpstreamClosedError, type RpcResponse } from './relay.js';
+import { Correlator, idKey, isNotification, isRequest, isReservedId, isResponse, UpstreamClosedError, type RpcResponse } from './relay.js';
 import { handleResolveCall, RESOLVE_TOOL, RESOLVE_TOOL_NAME } from './resolve-tool.js';
 import {
   blockedResult,
@@ -46,18 +46,17 @@ export interface ProxyExtension {
   reconcilerFor?(tool: string, args: Record<string, unknown>, ctx: ProxyContext): Reconciler | undefined;
 }
 
-export type GuardFactory = (humanResolver: HumanResolver) => Guard;
+export type GuardFactory = (ctx: ProxyContext) => Guard;
 
 export interface ProxyDeps {
   client: Transport;
   upstream: Transport;
-  guard: Guard | GuardFactory;
+  guard: GuardFactory;
   config: AgentOnceConfig;
   clock: Clock;
   cwd: string;
   env: NodeJS.ProcessEnv;
   extensions?: ProxyExtension[];
-  humanResolverFactory?: (ctx: ProxyContext) => HumanResolver | undefined;
   log?: (message: string) => void;
 }
 
@@ -67,7 +66,9 @@ export interface RunningProxy {
 }
 
 type Params = Record<string, unknown>;
-type Reply = { kind: 'result'; result: CallToolResult } | { kind: 'error'; error: { code: number; message: string; data?: unknown } };
+type RpcError = { code: number; message: string; data?: unknown };
+type Reply = { kind: 'result'; result: CallToolResult } | { kind: 'error'; error: RpcError };
+type ToolsState = 'unknown' | 'listed' | 'backoff';
 
 interface ForwardedRequest {
   id: RequestId;
@@ -80,10 +81,15 @@ interface GuardedRequest {
   id: RequestId;
   tool: string;
   actionId?: string;
+  raw?: RpcResponse;
   controller: AbortController;
   answered: boolean;
 }
 
+export const PREFETCH_TIMEOUT_MS = 30_000;
+export const MAX_TOOL_PAGES = 1000;
+const REMEMBERED_GUARDED_IDS = 10_000;
+const INVALID_REQUEST = -32600;
 const INTERNAL_ERROR = -32603;
 const UPSTREAM_GONE = -32000;
 const CANCELLED = 'notifications/cancelled';
@@ -104,8 +110,19 @@ function resultText(result: CallToolResult): string {
     .join('\n');
 }
 
+function recordedReply(result: JsonValue): Reply | undefined {
+  if (!isRecord(result)) return undefined;
+  if (Array.isArray(result.content)) return { kind: 'result', result: result as unknown as CallToolResult };
+  if (isRecord(result.error)) return { kind: 'error', error: result.error as unknown as RpcError };
+  return undefined;
+}
+
 function writeToStderr(message: string): void {
   process.stderr.write(`${message}\n`);
+}
+
+function reservedIdError(id: RequestId): JSONRPCMessage {
+  return { jsonrpc: '2.0', id, error: { code: INVALID_REQUEST, message: 'agent-once: request ids starting with "agent-once:" are reserved for the proxy' } };
 }
 
 class McpProxy implements RunningProxy {
@@ -120,21 +137,20 @@ class McpProxy implements RunningProxy {
   private readonly cwd: string;
   private readonly env: NodeJS.ProcessEnv;
   private readonly extensions: ProxyExtension[];
-  private readonly humanResolverFactory: ((ctx: ProxyContext) => HumanResolver | undefined) | undefined;
   private readonly log: (message: string) => void;
   private readonly upstreamRequests = new Correlator('upstream');
   private readonly clientRequests = new Correlator('client');
   private readonly forwarded = new Map<string, ForwardedRequest>();
   private readonly guarded = new Map<string, GuardedRequest>();
+  private readonly answeredGuarded = new Set<string>();
   private readonly annotations = new Map<string, ToolAnnotations | undefined>();
-  private readonly rawResponses = new WeakMap<ToolOutcome, RpcResponse>();
   private readonly patterns = new Map<string, RegExp>();
   private routing: Promise<void> = Promise.resolve();
   private listing: Promise<void> | undefined;
-  private toolsListed = false;
+  private toolsState: ToolsState = 'unknown';
+  private toolsGeneration = 0;
   private clientCapabilities: ClientCapabilities = {};
   private clientInfo: Implementation | undefined;
-  private humanResolver: HumanResolver | undefined;
   private upstreamClosed = false;
   private closing = false;
 
@@ -146,19 +162,12 @@ class McpProxy implements RunningProxy {
     this.cwd = deps.cwd;
     this.env = deps.env;
     this.extensions = deps.extensions ?? [];
-    this.humanResolverFactory = deps.humanResolverFactory;
     this.log = deps.log ?? writeToStderr;
     this.closed = new Promise((resolve) => {
       this.resolveClosed = resolve;
     });
     this.context = this.createContext();
-    if (typeof deps.guard === 'function') {
-      this.guard = deps.guard({ resolve: async (doubt) => (this.humanResolver === undefined ? 'unresolved' : this.humanResolver.resolve(doubt)) });
-    } else if (deps.humanResolverFactory !== undefined) {
-      throw new TypeError('humanResolverFactory needs guard to be a factory that accepts the human resolver');
-    } else {
-      this.guard = deps.guard;
-    }
+    this.guard = deps.guard(this.context);
   }
 
   async start(): Promise<void> {
@@ -197,7 +206,13 @@ class McpProxy implements RunningProxy {
 
   private fromClient(message: JSONRPCMessage): void {
     if (isResponse(message)) {
-      if (!this.clientRequests.settle(message)) this.sendUpstream(message);
+      if (this.clientRequests.settle(message)) return;
+      if (isReservedId(message.id)) this.log(`agent-once: dropped a client response for unknown proxy id ${String(message.id)}`);
+      else this.sendUpstream(message);
+      return;
+    }
+    if (isRequest(message) && isReservedId(message.id)) {
+      this.sendClient(reservedIdError(message.id));
       return;
     }
     this.routing = this.routing.then(() => this.routeClient(message));
@@ -234,7 +249,6 @@ class McpProxy implements RunningProxy {
   private captureInitialize(params: Params | undefined): void {
     this.clientCapabilities = isRecord(params?.capabilities) ? (params.capabilities as ClientCapabilities) : {};
     this.clientInfo = isRecord(params?.clientInfo) ? (params.clientInfo as Implementation) : undefined;
-    this.humanResolver = this.humanResolverFactory?.(this.context);
   }
 
   private async routeToolCall(request: JSONRPCRequest): Promise<void> {
@@ -245,11 +259,12 @@ class McpProxy implements RunningProxy {
       return;
     }
     const args = isRecord(params.arguments) ? params.arguments : {};
-    if (tool === RESOLVE_TOOL_NAME && this.config.exposeResolveTool) {
+    const annotations = await this.annotationsFor(tool);
+    if (tool === RESOLVE_TOOL_NAME && this.config.exposeResolveTool && !this.annotations.has(RESOLVE_TOOL_NAME)) {
       this.sendClient({ jsonrpc: '2.0', id: request.id, result: handleResolveCall(args, this.guard) });
       return;
     }
-    const call = await this.buildCall(tool, args, params);
+    const call = this.buildCall(tool, args, params, annotations);
     if (call.policy === 'pass') {
       this.forward(request, tool, args);
       return;
@@ -259,8 +274,8 @@ class McpProxy implements RunningProxy {
     void this.runGuarded(entry, { ...call, signal: entry.controller.signal }, params);
   }
 
-  private async buildCall(tool: string, args: Params, params: Params): Promise<GuardedCall> {
-    const decision = resolveToolPolicy(tool, await this.annotationsFor(tool), this.config);
+  private buildCall(tool: string, args: Params, params: Params, annotations: ToolAnnotations | undefined): GuardedCall {
+    const decision = resolveToolPolicy(tool, annotations, this.config);
     const rule = findToolRule(tool, this.config);
     const meta = isRecord(params._meta) ? params._meta : undefined;
     const session = resolveSession(meta, this.env, this.clientInfo?.name, this.cwd);
@@ -288,28 +303,55 @@ class McpProxy implements RunningProxy {
 
   private async annotationsFor(tool: string): Promise<ToolAnnotations | undefined> {
     if (this.annotations.has(tool)) return this.annotations.get(tool);
-    if (!this.toolsListed) await this.listAllTools();
+    if (this.toolsState === 'unknown') await this.prefetchTools();
     return this.annotations.get(tool);
   }
 
-  private listAllTools(): Promise<void> {
-    this.listing ??= this.fetchToolPages().finally(() => {
-      this.listing = undefined;
+  private prefetchTools(): Promise<void> {
+    if (this.listing !== undefined) return this.listing;
+    const generation = this.toolsGeneration;
+    const listing = new Promise<void>((resolve) => {
+      const timer = this.clock.setTimer(PREFETCH_TIMEOUT_MS, () => {
+        if (generation === this.toolsGeneration && this.toolsState === 'unknown') {
+          this.toolsState = 'backoff';
+          this.log(`agent-once: tools/list did not finish within ${PREFETCH_TIMEOUT_MS / 1000} s, so tools without known annotations are guarded`);
+        }
+        resolve();
+      });
+      void this.fetchToolPages(generation).then(() => {
+        timer.cancel();
+        resolve();
+      });
+    }).finally(() => {
+      if (this.listing === listing) this.listing = undefined;
     });
-    return this.listing;
+    this.listing = listing;
+    return listing;
   }
 
-  private async fetchToolPages(): Promise<void> {
+  private async fetchToolPages(generation: number): Promise<void> {
+    const seen = new Set<string>();
+    let cursor: string | undefined;
+    let pages = 0;
     try {
-      let cursor: string | undefined;
       do {
         const page = await this.requestUpstream('tools/list', cursor === undefined ? {} : { cursor });
+        if (generation !== this.toolsGeneration) return;
         this.captureTools(page.tools);
+        pages += 1;
         cursor = typeof page.nextCursor === 'string' ? page.nextCursor : undefined;
+        if (cursor !== undefined && (seen.has(cursor) || pages >= MAX_TOOL_PAGES)) {
+          this.toolsState = 'backoff';
+          this.log(`agent-once: stopped reading tools/list after ${pages} pages (repeated cursor or page limit), so unlisted tools are guarded`);
+          return;
+        }
+        if (cursor !== undefined) seen.add(cursor);
       } while (cursor !== undefined);
-      this.toolsListed = true;
+      this.toolsState = 'listed';
     } catch (error) {
-      this.log(`agent-once: could not list the MCP server's tools, so unknown tools are guarded: ${errorMessage(error)}`);
+      if (generation !== this.toolsGeneration) return;
+      this.toolsState = 'backoff';
+      this.log(`agent-once: could not list the MCP server's tools, so tools without known annotations are guarded: ${errorMessage(error)}`);
     }
   }
 
@@ -321,11 +363,18 @@ class McpProxy implements RunningProxy {
     }
   }
 
+  private toolsChanged(): void {
+    this.toolsGeneration += 1;
+    this.annotations.clear();
+    this.toolsState = 'unknown';
+    this.listing = undefined;
+  }
+
   private async runGuarded(entry: GuardedRequest, call: GuardedCall, params: Params): Promise<void> {
     let reply: Reply;
     try {
       const result = await this.guard.run(call, (context) => this.dispatch(entry, call, params, context));
-      reply = this.present(call, result);
+      reply = this.present(entry, call, result);
     } catch (error) {
       const result =
         error instanceof CanonicalizationError ? unidentifiableCallResult(call.tool, error.message) : callFailedResult(call.tool, entry.actionId, errorMessage(error));
@@ -338,7 +387,7 @@ class McpProxy implements RunningProxy {
     entry.actionId = context.actionId;
     if (this.upstreamClosed) return { kind: 'not_dispatched', error: 'the MCP server is not running' };
     const id = this.upstreamRequests.nextId();
-    const response = this.upstreamRequests.expect(id, { survivesClose: true });
+    const response = this.upstreamRequests.expectOrAbandon(id);
     const meta = { ...(isRecord(params._meta) ? params._meta : {}), [ACTION_META_KEY]: context.idempotencyKey ?? context.actionId };
     try {
       await this.upstream.send({ jsonrpc: '2.0', id, method: 'tools/call', params: { ...params, _meta: meta } });
@@ -347,16 +396,12 @@ class McpProxy implements RunningProxy {
       return { kind: 'not_dispatched', error: `cannot send the call to the MCP server: ${errorMessage(error)}` };
     }
     const reply = await response;
-    if (reply.kind === 'error') {
-      const outcome: ToolOutcome = { kind: 'error_result', result: { error: reply.error } as unknown as JsonValue };
-      this.rawResponses.set(outcome, reply);
-      return outcome;
-    }
+    if (reply.kind === 'abandoned') return reply;
+    entry.raw = reply;
+    if (reply.kind === 'error') return { kind: 'error_result', result: { error: reply.error } as unknown as JsonValue };
     const result = reply.result as CallToolResult;
     this.notifyResult(call.tool, call.args, result);
-    const outcome = this.classify(call.tool, result);
-    this.rawResponses.set(outcome, reply);
-    return outcome;
+    return this.classify(call.tool, result);
   }
 
   private classify(tool: string, result: CallToolResult): ToolOutcome {
@@ -368,7 +413,7 @@ class McpProxy implements RunningProxy {
     }
     for (const extension of this.extensions) {
       const outcome = extension.classifyOutcome?.(tool, result);
-      if (outcome !== undefined) return { ...outcome };
+      if (outcome !== undefined) return outcome;
     }
     return isError ? { kind: 'error_result', result: result as JsonValue } : { kind: 'ok', result: result as JsonValue };
   }
@@ -382,22 +427,11 @@ class McpProxy implements RunningProxy {
     return compiled;
   }
 
-  private present(call: GuardedCall, result: GuardResult): Reply {
+  private present(entry: GuardedRequest, call: GuardedCall, result: GuardResult): Reply {
     switch (result.status) {
       case 'executed':
-      case 'passed': {
-        if (result.recorded === false) {
-          this.log(`agent-once: the outcome of ${call.tool} action ${result.actionId} could not be written to the ledger; a retry will be treated as in doubt.`);
-        }
-        const raw = this.rawResponses.get(result.outcome);
-        if (raw?.kind === 'error') return raw;
-        if (raw?.kind === 'result') {
-          const forwarded = raw.result as CallToolResult;
-          return { kind: 'result', result: result.actionId === undefined ? forwarded : withStatus(forwarded, 'executed', result.actionId) };
-        }
-        const error = result.outcome.kind === 'transport_error' || result.outcome.kind === 'not_dispatched' ? result.outcome.error : 'no result';
-        return { kind: 'result', result: callFailedResult(call.tool, result.actionId, error) };
-      }
+      case 'passed':
+        return this.presentExecuted(entry, call, result);
       case 'replayed':
         return { kind: 'result', result: replayedResult(result) };
       case 'in_doubt':
@@ -409,13 +443,36 @@ class McpProxy implements RunningProxy {
     }
   }
 
+  private presentExecuted(entry: GuardedRequest, call: GuardedCall, result: GuardResult & { status: 'executed' | 'passed' }): Reply {
+    if (result.recorded === false) {
+      this.log(`agent-once: the outcome of ${call.tool} action ${result.actionId} could not be written to the ledger; a retry will be treated as in doubt.`);
+    }
+    const outcome = result.outcome;
+    const reply = entry.raw ?? (outcome.kind === 'ok' || outcome.kind === 'error_result' ? recordedReply(outcome.result) : undefined);
+    if (reply === undefined) {
+      const error = outcome.kind === 'transport_error' || outcome.kind === 'not_dispatched' ? outcome.error : 'the MCP server did not answer';
+      return { kind: 'result', result: callFailedResult(call.tool, result.actionId, error) };
+    }
+    if (reply.kind === 'error') return reply;
+    const forwarded = reply.result as CallToolResult;
+    return { kind: 'result', result: result.actionId === undefined ? forwarded : withStatus(forwarded, 'executed', result.actionId) };
+  }
+
   private answerGuarded(entry: GuardedRequest, reply: Reply): void {
     const key = idKey(entry.id);
     if (this.guarded.get(key) === entry) this.guarded.delete(key);
+    this.rememberAnswered(key);
     if (entry.answered || entry.controller.signal.aborted) return;
     entry.answered = true;
     if (reply.kind === 'error') this.sendClient({ jsonrpc: '2.0', id: entry.id, error: reply.error });
     else this.sendClient({ jsonrpc: '2.0', id: entry.id, result: reply.result });
+  }
+
+  private rememberAnswered(key: string): void {
+    this.answeredGuarded.add(key);
+    if (this.answeredGuarded.size <= REMEMBERED_GUARDED_IDS) return;
+    const oldest = this.answeredGuarded.values().next();
+    if (oldest.done !== true) this.answeredGuarded.delete(oldest.value);
   }
 
   private absorbCancel(params: Params | undefined): boolean {
@@ -424,6 +481,7 @@ class McpProxy implements RunningProxy {
     const key = idKey(requestId);
     const entry = this.guarded.get(key);
     if (entry === undefined) {
+      if (this.answeredGuarded.has(key)) return true;
       this.forwarded.delete(key);
       return false;
     }
@@ -445,16 +503,21 @@ class McpProxy implements RunningProxy {
   private fromUpstream(message: JSONRPCMessage): void {
     if (isResponse(message)) {
       if (this.upstreamRequests.settle(message)) return;
+      if (isReservedId(message.id)) {
+        this.log(`agent-once: dropped an MCP server response for unknown proxy id ${String(message.id)}`);
+        return;
+      }
       const key = idKey(message.id);
       const request = this.forwarded.get(key);
       this.forwarded.delete(key);
       this.sendClient(request !== undefined && 'result' in message ? { ...message, result: this.adjustResult(request, message.result) } : message);
       return;
     }
-    if (isNotification(message) && message.method === TOOLS_CHANGED) {
-      this.annotations.clear();
-      this.toolsListed = false;
+    if (isRequest(message) && isReservedId(message.id)) {
+      this.sendUpstream(reservedIdError(message.id));
+      return;
     }
+    if (isNotification(message) && message.method === TOOLS_CHANGED) this.toolsChanged();
     this.sendClient(message);
   }
 
@@ -465,7 +528,12 @@ class McpProxy implements RunningProxy {
     }
     if (request.method !== 'tools/list') return result;
     this.captureTools(result.tools);
+    if (this.toolsState === 'backoff') this.toolsState = 'unknown';
     if (!this.config.exposeResolveTool || typeof result.nextCursor === 'string' || !Array.isArray(result.tools)) return result;
+    if (this.annotations.has(RESOLVE_TOOL_NAME)) {
+      this.log(`agent-once: the MCP server already has a tool named ${RESOLVE_TOOL_NAME}, so the agent-once resolve tool is not added and calls to that name go to the server`);
+      return result;
+    }
     return { ...result, tools: [...(result.tools as unknown[]), RESOLVE_TOOL] };
   }
 
@@ -541,14 +609,12 @@ class McpProxy implements RunningProxy {
     if (this.upstreamClosed) return;
     this.upstreamClosed = true;
     const exitCode = (this.upstream as ExitAwareTransport).exitCode ?? null;
-    this.upstreamRequests.close(new UpstreamClosedError('the MCP server exited'));
     const sends: Promise<void>[] = [];
     for (const entry of this.guarded.values()) {
       if (entry.answered || entry.controller.signal.aborted) continue;
       entry.answered = true;
       sends.push(this.sendClientAsync({ jsonrpc: '2.0', id: entry.id, result: upstreamExitedResult(entry.tool, entry.actionId, exitCode) }));
     }
-    this.guarded.clear();
     for (const request of this.forwarded.values()) {
       const message: JSONRPCMessage =
         request.method === 'tools/call'
@@ -557,6 +623,7 @@ class McpProxy implements RunningProxy {
       sends.push(this.sendClientAsync(message));
     }
     this.forwarded.clear();
+    this.upstreamRequests.close(new UpstreamClosedError('the MCP server exited'));
     await Promise.all(sends);
     this.closing = true;
     try {

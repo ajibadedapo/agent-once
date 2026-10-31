@@ -119,9 +119,14 @@ async function run(args: string[], io: CliIo, deps: ChaosDeps): Promise<number> 
       json: { type: 'string' },
       markdown: { type: 'string' },
       'fail-on-duplicates': { type: 'boolean' },
+      help: { type: 'boolean', short: 'h' },
     },
     CHAOS_USAGE,
   );
+  if (values.help === true) {
+    io.stdout(`${CHAOS_USAGE}\n`);
+    return EXIT_OK;
+  }
   if (positionals.length > 0) throw new CliExit(EXIT_USAGE, CHAOS_USAGE);
   const agentValues = values.agent as unknown as string[] | undefined;
   const agents = agentValues === undefined ? [...DEFAULT_AGENTS] : agentValues.map(parseAgent);

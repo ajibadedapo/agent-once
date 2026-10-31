@@ -12,6 +12,9 @@ classifiers = [
   "Typing :: Typed",
 ]
 
+[project.entry-points.pytest11]
+agent_once = "agent_once.pytest_plugin"
+
 [dependency-groups]
 dev = [
   "pytest==9.2.0",

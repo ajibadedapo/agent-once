@@ -1,0 +1,84 @@
+name: agent-once chaos
+description: Run your agent against the agent-once chaos targets and fail the job when a guarded run causes a side effect twice.
+author: Hammed Ajibade
+branding:
+  icon: shield
+  color: green
+
+inputs:
+  agent-command:
+    description: Shell command that starts your agent. It receives AGENT_ONCE_CHAOS_URL, AGENT_ONCE_CHAOS_MCP (a JSON argv for the targets MCP server, wrapped by the guard when guard is on), AGENT_ONCE_TASK and AGENT_ONCE_SESSION. Use scripted:naive or scripted:obedient to run a built-in agent.
+    required: true
+  scenarios:
+    description: Comma-separated chaos scenarios, or all.
+    required: false
+    default: all
+  targets:
+    description: Comma-separated targets (checkout, booking, email, ticket), or all.
+    required: false
+    default: all
+  guard:
+    description: Run with the guard on, off, or both for a comparison.
+    required: false
+    default: "on"
+  runs:
+    description: Runs per scenario and target.
+    required: false
+    default: "3"
+  fail-on-duplicates:
+    description: Fail the step when a guarded run duplicated an effect (true or false).
+    required: false
+    default: "true"
+  agent-once-version:
+    description: The agent-once npm version to run with npx, for example latest or 0.1.0. Use local to build and run the agent-once checkout this action was loaded from, which works before any release is published (for example uses ./ in this repository).
+    required: false
+    default: latest
+
+runs:
+  using: composite
+  steps:
+    - name: Build agent-once from the action checkout
+      if: inputs.agent-once-version == 'local'
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        if [ ! -f packages/agent-once/dist/cli/main.js ]; then
+          npm ci --no-audit --no-fund
+          npm run build
+        fi
+
+    - name: Run the agent-once chaos suite
+      shell: bash
+      env:
+        AGENT_COMMAND: ${{ inputs.agent-command }}
+        SCENARIOS: ${{ inputs.scenarios }}
+        TARGETS: ${{ inputs.targets }}
+        GUARD: ${{ inputs.guard }}
+        RUNS: ${{ inputs.runs }}
+        FAIL_ON_DUPLICATES: ${{ inputs.fail-on-duplicates }}
+        AGENT_ONCE_VERSION: ${{ inputs.agent-once-version }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        args=(chaos run --agent "$AGENT_COMMAND" --guard "$GUARD" --runs "$RUNS" --markdown "$GITHUB_STEP_SUMMARY" --json agent-once-chaos.json)
+        if [ "$SCENARIOS" != "all" ]; then args+=(--scenarios "$SCENARIOS"); fi
+        if [ "$TARGETS" != "all" ]; then args+=(--targets "$TARGETS"); fi
+        case "$FAIL_ON_DUPLICATES" in
+          true) args+=(--fail-on-duplicates) ;;
+          false) ;;
+          *) echo "::error::fail-on-duplicates must be true or false, got $FAIL_ON_DUPLICATES"; exit 2 ;;
+        esac
+        if [ "$AGENT_ONCE_VERSION" = "local" ]; then
+          node "$ACTION_PATH/packages/agent-once/dist/cli/main.js" "${args[@]}"
+        else
+          npx --yes "agent-once@$AGENT_ONCE_VERSION" "${args[@]}"
+        fi
+
+    - name: Upload the chaos report
+      if: always()
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      with:
+        name: agent-once-chaos
+        path: agent-once-chaos.json
+        if-no-files-found: warn

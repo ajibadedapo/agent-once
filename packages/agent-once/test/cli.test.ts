@@ -255,6 +255,15 @@ describe('agent-once chaos', () => {
     expect(await stopped(child)).toBe(0);
   }, 30_000);
 
+  test('chaos run --help prints every run flag on stdout and exits 0 without running', () => {
+    const home = tempDir();
+    const result = runCli(['chaos', 'run', '--help'], home);
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe('');
+    for (const flag of ['--agent', '--scenarios', '--targets', '--guard', '--runs', '--json', '--markdown', '--fail-on-duplicates']) expect(result.stdout).toContain(flag);
+    expect(result.stdout).not.toContain('| Scenario');
+  });
+
   test('chaos without a known subcommand is a usage error', () => {
     const home = tempDir();
     const result = runCli(['chaos', 'explode'], home);

@@ -275,7 +275,7 @@ describe('browserCallRule', () => {
       ['playwright', 'browser_evaluate', { function: '() => document.forms[0].requestSubmit()' }, 'standard'],
       ['playwright', 'browser_evaluate', { function: "() => fetch('/api/pay', { method: 'POST' })" }, 'money'],
       ['playwright', 'browser_run_code_unsafe', { code: "async (page) => { await page.getByRole('button', { name: 'Place order' }).click(); }" }, 'money'],
-      ['playwright', 'browser_evaluate', { function: '() => window.app.publishDraft' }, 'irreversible'],
+      ['playwright', 'browser_evaluate', { function: "() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Place order').click()" }, 'money'],
       ['chrome-devtools', 'evaluate_script', { function: "() => navigator.sendBeacon('/log', 'x')" }, 'irreversible'],
       ['chrome-devtools', 'evaluate_script', { function: "() => { const x = new XMLHttpRequest(); x.open('POST', '/a'); x.send(); }" }, 'irreversible'],
       ['chrome-devtools', 'evaluate_script', { function: "(el) => el.dispatchEvent(new MouseEvent('mousedown'))", args: [{ uid: '1_5' }] }, 'standard'],
@@ -291,13 +291,17 @@ describe('browserCallRule', () => {
     }
   });
 
-  test('scripts without a side-effect call or word pass in both profiles', () => {
+  test('scripts without a click, submit, event dispatch or request call pass in both profiles, even when they name a side-effect word', () => {
     for (const [profile, tool, args] of [
       ['playwright', 'browser_evaluate', { function: '() => document.title' }],
       ['playwright', 'browser_evaluate', { function: '(el) => el.textContent', element: 'Place order button', target: 'e5' }],
       ['playwright', 'browser_run_code_unsafe', { code: 'async (page) => page.title()' }],
       ['playwright', 'browser_run_code_unsafe', {}],
       ['chrome-devtools', 'evaluate_script', { function: '() => document.querySelectorAll("a").length' }],
+      ['playwright', 'browser_evaluate', { function: "() => document.querySelector('.order-total').textContent" }],
+      ['playwright', 'browser_evaluate', { function: "() => document.createElement('div')" }],
+      ['chrome-devtools', 'evaluate_script', { function: "() => document.querySelectorAll('.post').length" }],
+      ['playwright', 'browser_evaluate', { function: '() => window.app.publishDraft' }],
     ] as const) {
       expect(browserCallRule(profile, tool, args, pageAfter(profile, 'snapshot'), DEFAULT_BROWSER_CONFIG).policy, tool).toBe('pass');
     }

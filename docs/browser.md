@@ -14,7 +14,7 @@ claude mcp add devtools -- npx agent-once mcp -- npx chrome-devtools-mcp@latest
 
 ## What is a side effect
 
-Only these tools can be guarded. Every other known browser tool passes (snapshots, screenshots, navigation, hover, typing without submit, `fill_form`, tabs, waits, console and network reads), and so does a script that does none of the things listed below.
+Only these tools can be guarded. Every other known browser tool passes (snapshots, screenshots, navigation, hover, typing without submit, `fill_form`, tabs, waits, console and network reads), and so does a script that makes none of the calls listed below.
 
 | Server | Tools | When |
 |---|---|---|
@@ -32,7 +32,7 @@ A checked call is guarded when its text matches a side-effect word (whole words,
 - for element actions, the element's label from the latest snapshot (resolved by `ref`, `target` or `uid`) and the agent's element description; the page URL is used only when both are empty;
 - for keyboard submits, the page URL, the page title and the button and link labels of the last snapshot of the same URL.
 
-A script is guarded when its code text calls `click`, `dblclick`, `submit`, `requestSubmit`, `dispatchEvent`, `fetch` or `sendBeacon`, mentions `XMLHttpRequest`, or matches a side-effect word. Its class comes from the words in the code text (`fetch('/api/pay')` is `money`), and its identity is the page URL plus the code text, so the same script on the same page is the same intent.
+A script is guarded when its code text calls `click`, `dblclick`, `submit`, `requestSubmit`, `dispatchEvent`, `fetch` or `sendBeacon`, or mentions `XMLHttpRequest`. Side-effect words alone do not guard a script, so a read such as `document.querySelector('.order-total').textContent` passes. For a guarded script the words choose the class (`fetch('/api/pay')` is `money`), and its identity is the page URL plus the code text, so the same script on the same page is the same intent.
 
 The class follows the same words: "Place order" and "Pay now" are `money`, "Send message" and "Delete account" are `irreversible`, "Create ticket" is `standard`. Money and irreversible clicks are `block-on-doubt`.
 

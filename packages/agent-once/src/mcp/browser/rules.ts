@@ -188,7 +188,7 @@ export function browserIdentity(profile: BrowserProfile, args: Args, page: PageS
 }
 
 function scriptRule(code: string, page: PageState, cfg: BrowserConfig): BrowserCallRule {
-  if (!SCRIPT_SIDE_EFFECT_CALL.test(code) && !matchesAnyPattern('', code, cfg.sideEffectPatterns)) return { policy: 'pass', toolClass: 'standard' };
+  if (!SCRIPT_SIDE_EFFECT_CALL.test(code)) return { policy: 'pass', toolClass: 'standard' };
   const url = page.url();
   const identity = { page_url: url === undefined ? '' : normalizePageUrl(url), label: '' };
   return guarded(classifyTool('', code, { money: cfg.moneyPatterns, irreversible: cfg.irreversiblePatterns }), identity, capture(cfg, page));

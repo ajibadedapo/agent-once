@@ -336,6 +336,20 @@ describe('browser extension in the proxy', () => {
     ]);
   });
 
+  test('a read-only script that names a money word passes, and an identical repeat executes again', async () => {
+    const proxy = await playwright();
+    await snapshot(proxy, 'snapshot');
+    const total = { content: [{ type: 'text' as const, text: '### Result\n"$12.00"' }] };
+    proxy.server.answer('browser_evaluate', total, total);
+    const read = { function: "() => document.querySelector('.order-total').textContent" };
+    const first = await proxy.client.callTool({ name: 'browser_evaluate', arguments: read });
+    const second = await proxy.client.callTool({ name: 'browser_evaluate', arguments: read });
+    expect(statusOf(first)).toBeUndefined();
+    expect(statusOf(second)).toBeUndefined();
+    expect(proxy.server.callsTo('browser_evaluate')).toBe(2);
+    expect(proxy.store.appended).toEqual([]);
+  });
+
   test('auto mode detects chrome-devtools from the server answer and resolves uids', async () => {
     const proxy = await start({ info: serverInfo('chrome-devtools'), tools: chromeDevtoolsTools(), command: ['node', 'server.js'] });
     proxy.server.answer('take_snapshot', fixture('chrome-devtools', 'snapshot'));

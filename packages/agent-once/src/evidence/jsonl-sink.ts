@@ -1,5 +1,6 @@
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { appendFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { PRIVATE_FILE_MODE, ensurePrivateDirectory } from '../private-files.js';
 import type { EvidenceEvent, EvidenceSink } from './types.js';
 
 export class JsonlEvidenceSink implements EvidenceSink {
@@ -9,9 +10,9 @@ export class JsonlEvidenceSink implements EvidenceSink {
 
   emit(event: EvidenceEvent): void {
     if (!this.directoryReady) {
-      mkdirSync(dirname(this.path), { recursive: true });
+      ensurePrivateDirectory(dirname(this.path));
       this.directoryReady = true;
     }
-    appendFileSync(this.path, `${JSON.stringify(event)}\n`, 'utf8');
+    appendFileSync(this.path, `${JSON.stringify(event)}\n`, { encoding: 'utf8', mode: PRIVATE_FILE_MODE });
   }
 }

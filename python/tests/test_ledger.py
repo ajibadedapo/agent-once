@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import stat
+import sys
 from collections.abc import Callable, Generator, Iterator
 from pathlib import Path
 from typing import Any
@@ -381,6 +383,35 @@ def test_creates_the_schema_and_a_missing_parent_directory(
     path = tmp_path / "nested" / "home" / "ledger.db"
     sqlite_open(path)
     assert raw_query(path, "SELECT value FROM meta WHERE key = 'schema_version'") == [("1",)]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes")
+def test_creates_the_home_0o700_and_the_database_wal_and_shm_files_0o600(
+    sqlite_open: Callable[..., SqliteLedgerStore], tmp_path: Path
+) -> None:
+    home = tmp_path / "home"
+    path = home / "ledger.db"
+    store = sqlite_open(path)
+    store.transact(lambda tx: tx.append(new_event(intent_hash="7" * 64)))
+    assert stat.S_IMODE(home.stat().st_mode) == 0o700
+    for file in (path, Path(f"{path}-wal"), Path(f"{path}-shm")):
+        assert file.exists()
+        assert stat.S_IMODE(file.stat().st_mode) == 0o600
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes")
+def test_keeps_an_existing_stricter_directory_mode(
+    sqlite_open: Callable[..., SqliteLedgerStore], tmp_path: Path
+) -> None:
+    home = tmp_path / "home"
+    sqlite_open(home / "ledger.db").close()
+    home.chmod(0o300)
+    try:
+        sqlite_open(home / "ledger.db").close()
+        mode = stat.S_IMODE(home.stat().st_mode)
+    finally:
+        home.chmod(0o700)
+    assert mode == 0o300
 
 
 def test_prunes_expired_rows_on_open(

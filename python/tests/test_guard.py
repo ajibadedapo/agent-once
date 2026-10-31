@@ -220,6 +220,23 @@ def test_an_async_execute_passed_to_run_is_not_dispatched() -> None:
     assert expect_status(s.guard.run(guarded_call(), tool.execute), "executed").outcome == OK
 
 
+def test_a_scheduled_future_returned_to_run_is_a_transport_error_and_holds_the_retry() -> None:
+    s = setup()
+    loop = asyncio.new_event_loop()
+    try:
+        scheduled = loop.create_future()
+        tool = Scripted(OK)
+        result = expect_status(s.guard.run(guarded_call(), lambda _context: scheduled), "executed")
+        assert result.outcome is not None and result.outcome.kind == "transport_error"
+        assert "arun" in result.outcome.error
+        assert s.ledger.last().detail["failure_kind"] == "transport_error"
+        assert s.guard.run(guarded_call(), tool.execute).status == "in_doubt"
+        assert tool.calls == []
+        assert not scheduled.cancelled()
+    finally:
+        loop.close()
+
+
 def test_reconciler_happened_turns_doubt_into_a_replay_without_dispatch() -> None:
     s = setup()
     tool = Scripted(TRANSPORT, OK)
@@ -1146,6 +1163,35 @@ def test_decorating_a_callable_that_returns_an_awaitable_records_not_dispatched(
     assert ran == []
     assert s.ledger.last().state == "failed"
     assert s.ledger.last().detail["failure_kind"] == "not_dispatched"
+
+
+def test_decorating_a_callable_that_returns_a_scheduled_task_records_transport_error() -> None:
+    s = setup()
+
+    async def scenario() -> None:
+        ran: list[str] = []
+        scheduled: list[asyncio.Task[str]] = []
+
+        async def send(title: str) -> str:
+            ran.append(title)
+            return title
+
+        @s.guard.tool(name="create_ticket")
+        def create(title: str) -> asyncio.Task[str]:
+            task = asyncio.ensure_future(send(title))
+            scheduled.append(task)
+            return task
+
+        with pytest.raises(GuardedCallFailedError, match="arun"):
+            create("a")
+        assert s.ledger.last().detail["failure_kind"] == "transport_error"
+        with pytest.raises(ActionInDoubt):
+            create("a")
+        assert len(scheduled) == 1
+        assert await scheduled[0] == "a"
+        assert ran == ["a"]
+
+    asyncio.run(scenario())
 
 
 def test_decorated_methods_leave_self_out_of_the_identity() -> None:

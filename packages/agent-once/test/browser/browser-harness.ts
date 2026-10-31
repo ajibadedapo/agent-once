@@ -81,6 +81,7 @@ export function playwrightTools(): Tool[] {
     tool('browser_snapshot', { readOnlyHint: true, destructiveHint: false }),
     tool('browser_click', DESTRUCTIVE),
     tool('browser_hover', DESTRUCTIVE),
+    tool('browser_evaluate', DESTRUCTIVE),
   ];
 }
 

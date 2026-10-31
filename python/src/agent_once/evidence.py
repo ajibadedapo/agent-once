@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Literal, Protocol
 
 from .canonical import JsonValue
+from .private_files import ensure_private_directory, open_private_file
 
 EvidenceKind = Literal["decision", "state", "resolve", "reconcile"]
 
@@ -39,10 +40,10 @@ class JsonlEvidence:
 
     def emit(self, event: EvidenceEvent) -> None:
         if not self._directory_ready:
-            os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
+            ensure_private_directory(os.path.dirname(self._path))
             self._directory_ready = True
         line = json.dumps(
             event.to_json(), ensure_ascii=False, separators=(",", ":"), allow_nan=False
         )
-        with open(self._path, "a", encoding="utf-8") as handle:
+        with os.fdopen(open_private_file(self._path), "a", encoding="utf-8") as handle:
             handle.write(line + "\n")

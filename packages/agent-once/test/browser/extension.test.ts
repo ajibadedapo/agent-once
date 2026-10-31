@@ -298,6 +298,25 @@ describe('browser extension in the proxy', () => {
     expect(proxy.server.callsTo('browser_click')).toBe(1);
   });
 
+  test('a script that clicks is guarded and a read-only script passes without touching the ledger', async () => {
+    const proxy = await playwright();
+    await snapshot(proxy, 'snapshot');
+    const evaluated = { content: [{ type: 'text' as const, text: '### Result\n"Checkout"' }] };
+    proxy.server.answer('browser_evaluate', evaluated, evaluated);
+    await proxy.client.callTool({ name: 'browser_evaluate', arguments: { function: '() => document.title' } });
+    expect(proxy.store.appended).toEqual([]);
+    proxy.server.answer('browser_snapshot', fixture('playwright', 'done-snapshot'));
+    const clickScript = { function: "() => document.querySelector('#place-order').click()" };
+    const first = await proxy.client.callTool({ name: 'browser_evaluate', arguments: clickScript });
+    expect(statusOf(first)?.status).toBe('executed');
+    expect(proxy.server.calls.slice(-2).map((call) => call.name)).toEqual(['browser_evaluate', 'browser_snapshot']);
+    expect(proxy.store.appended.map((event) => [event.state, event.toolClass])).toEqual([
+      ['intended', 'money'],
+      ['sent', 'money'],
+      ['confirmed', 'money'],
+    ]);
+  });
+
   test('auto mode detects chrome-devtools from the server answer and resolves uids', async () => {
     const proxy = await start({ info: serverInfo('chrome-devtools'), tools: chromeDevtoolsTools(), command: ['node', 'server.js'] });
     proxy.server.answer('take_snapshot', fixture('chrome-devtools', 'snapshot'));

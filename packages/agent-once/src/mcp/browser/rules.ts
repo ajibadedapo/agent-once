@@ -13,17 +13,28 @@ export interface BrowserCallRule {
 }
 
 type Args = Record<string, unknown>;
-type SideEffectKind = 'element' | 'keyboard';
+type SideEffectKind = 'element' | 'keyboard' | 'script';
 
 interface SideEffectTool {
   kind: SideEffectKind;
   applies(args: Args): boolean;
+  codeKey?: string;
 }
 
 const ENTER_KEYS: ReadonlySet<unknown> = new Set(['Enter', 'NumpadEnter']);
 const ALWAYS = (): boolean => true;
 const element: SideEffectTool = { kind: 'element', applies: ALWAYS };
 const pressesEnter: SideEffectTool = { kind: 'keyboard', applies: (args) => ENTER_KEYS.has(args.key) };
+const SCRIPT_SIDE_EFFECT_CALL = /\b(?:click|dblclick|submit|requestSubmit|dispatchEvent|fetch|sendBeacon)\s*\(|\bXMLHttpRequest\b/;
+
+function script(codeKey: string): SideEffectTool {
+  return { kind: 'script', codeKey, applies: (args) => scriptText(args, codeKey) !== '' };
+}
+
+function scriptText(args: Args, codeKey: string): string {
+  const code = args[codeKey];
+  return typeof code === 'string' ? code : '';
+}
 
 const SIDE_EFFECT_TOOLS: Readonly<Record<BrowserProfile, ReadonlyMap<string, SideEffectTool>>> = {
   playwright: new Map([
@@ -33,6 +44,8 @@ const SIDE_EFFECT_TOOLS: Readonly<Record<BrowserProfile, ReadonlyMap<string, Sid
     ['browser_select_option', element],
     ['browser_file_upload', element],
     ['browser_drop', element],
+    ['browser_evaluate', script('function')],
+    ['browser_run_code_unsafe', script('code')],
   ]),
   'chrome-devtools': new Map([
     ['click', element],
@@ -40,6 +53,7 @@ const SIDE_EFFECT_TOOLS: Readonly<Record<BrowserProfile, ReadonlyMap<string, Sid
     ['press_key', pressesEnter],
     ['upload_file', element],
     ['drag', element],
+    ['evaluate_script', script('function')],
   ]),
 };
 
@@ -60,7 +74,6 @@ const PASSING_TOOLS: Readonly<Record<BrowserProfile, ReadonlySet<string>>> = {
     'browser_console_messages',
     'browser_handle_dialog',
     'browser_emulate_media',
-    'browser_evaluate',
     'browser_fill_form',
     'browser_find',
     'browser_navigate',
@@ -77,7 +90,6 @@ const PASSING_TOOLS: Readonly<Record<BrowserProfile, ReadonlySet<string>>> = {
   'chrome-devtools': new Set([
     'close_page',
     'emulate',
-    'evaluate_script',
     'fill',
     'fill_form',
     'get_console_message',
@@ -175,6 +187,13 @@ export function browserIdentity(profile: BrowserProfile, args: Args, page: PageS
   return { page_url: url === undefined ? '' : normalizePageUrl(url), label: resolveLabel(profile, args, page) };
 }
 
+function scriptRule(code: string, page: PageState, cfg: BrowserConfig): BrowserCallRule {
+  if (!SCRIPT_SIDE_EFFECT_CALL.test(code) && !matchesAnyPattern('', code, cfg.sideEffectPatterns)) return { policy: 'pass', toolClass: 'standard' };
+  const url = page.url();
+  const identity = { page_url: url === undefined ? '' : normalizePageUrl(url), label: '' };
+  return guarded(classifyTool('', code, { money: cfg.moneyPatterns, irreversible: cfg.irreversiblePatterns }), identity, capture(cfg, page));
+}
+
 function sideEffectTexts(tool: SideEffectTool, args: Args, page: PageState, identity: { page_url: string; label: string }): string[] {
   if (tool.kind === 'keyboard') return [identity.page_url, page.title() ?? '', ...page.actionLabels()];
   const described = [identity.label, text(args.element)].filter((value) => value !== '');
@@ -193,6 +212,7 @@ function guarded(toolClass: ToolClass, identity: { page_url: string; label: stri
 export function browserCallRule(profile: BrowserProfile, tool: string, args: Args, page: PageState, cfg: BrowserConfig): BrowserCallRule {
   const sideEffect = SIDE_EFFECT_TOOLS[profile].get(tool);
   if (sideEffect === undefined || !sideEffect.applies(args)) return { policy: 'pass', toolClass: 'standard' };
+  if (sideEffect.codeKey !== undefined) return scriptRule(scriptText(args, sideEffect.codeKey), page, cfg);
   const identity = browserIdentity(profile, args, page);
   const captured = capture(cfg, page);
   if (profile === 'chrome-devtools' && sideEffect.kind === 'element' && snapshotLabel(profile, args, page).unresolvedRef) {

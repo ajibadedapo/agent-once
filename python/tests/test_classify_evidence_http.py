@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import stat
+import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
 from harness import START_MS
 
 from agent_once import (
@@ -123,6 +126,24 @@ def test_jsonl_evidence_appends_one_line_per_event_in_the_shared_format(tmp_path
         "sessionKey": "client:/work",
         "detail": {"state": "intended", "occurrence": 0},
     }
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes")
+def test_jsonl_evidence_creates_the_directory_0o700_and_the_file_0o600(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    path = home / "events.jsonl"
+    JsonlEvidence(str(path)).emit(evidence_event())
+    assert stat.S_IMODE(home.stat().st_mode) == 0o700
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes")
+def test_jsonl_evidence_keeps_an_existing_stricter_file_mode(tmp_path: Path) -> None:
+    path = tmp_path / "events.jsonl"
+    path.write_text("", encoding="utf-8")
+    path.chmod(0o200)
+    JsonlEvidence(str(path)).emit(evidence_event())
+    assert stat.S_IMODE(path.stat().st_mode) == 0o200
 
 
 def test_idempotency_headers_carry_the_key() -> None:

@@ -25,6 +25,7 @@ from .ledger import (
     reject_awaitable,
     stored_event,
 )
+from .private_files import ensure_private_directory, ensure_private_file
 
 LEDGER_V1_SQL = """CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE events (
@@ -220,7 +221,8 @@ class SqliteLedgerStore:
         timeout_ms = _validate_busy_timeout(busy_timeout_ms)
         connection: sqlite3.Connection | None = None
         try:
-            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            ensure_private_directory(os.path.dirname(path))
+            ensure_private_file(path)
             connection = sqlite3.connect(
                 path, timeout=timeout_ms / 1000, isolation_level=None, check_same_thread=False
             )

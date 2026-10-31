@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -81,6 +81,28 @@ describe('SqliteLedgerStore', () => {
     const path = join(tempDir(), 'nested', 'home', 'ledger.db');
     open(path);
     expect(rawQuery(path, "SELECT value FROM meta WHERE key = 'schema_version'")).toEqual([{ value: '1' }]);
+  });
+
+  test.skipIf(process.platform === 'win32')('creates the ledger home 0o700 and the database, -wal and -shm files 0o600', () => {
+    const home = join(tempDir(), 'home');
+    const path = join(home, 'ledger.db');
+    const store = open(path);
+    store.transact((tx) => tx.append(newEvent({ intentHash: '7'.repeat(64) })));
+    expect(statSync(home).mode & 0o777).toBe(0o700);
+    for (const file of [path, `${path}-wal`, `${path}-shm`]) {
+      expect(existsSync(file)).toBe(true);
+      expect(statSync(file).mode & 0o777).toBe(0o600);
+    }
+  });
+
+  test.skipIf(process.platform === 'win32')('keeps an existing stricter directory mode', () => {
+    const home = join(tempDir(), 'home');
+    open(join(home, 'ledger.db')).close();
+    chmodSync(home, 0o300);
+    open(join(home, 'ledger.db')).close();
+    const mode = statSync(home).mode & 0o777;
+    chmodSync(home, 0o700);
+    expect(mode).toBe(0o300);
   });
 
   test('prunes expired rows on open', () => {

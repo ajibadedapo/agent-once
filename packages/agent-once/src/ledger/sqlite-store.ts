@@ -1,9 +1,9 @@
-import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { DatabaseSync, StatementSync } from 'node:sqlite';
 import { canonicalize, type JsonValue } from '../canonical/jcs.js';
 import type { Clock } from '../time/clock.js';
 import { LedgerConflictError, LedgerSchemaTooNewError, LedgerUnavailableError, LedgerUsageError } from './errors.js';
+import { ensurePrivateDirectory, ensurePrivateFile } from '../private-files.js';
 import { loadNodeSqlite } from './suppress-sqlite-warning.js';
 import {
   LEDGER_SCHEMA_VERSION,
@@ -219,7 +219,8 @@ export class SqliteLedgerStore implements LedgerStore {
     const { DatabaseSync } = loadNodeSqlite();
     let db: DatabaseSync | undefined;
     try {
-      mkdirSync(dirname(path), { recursive: true });
+      ensurePrivateDirectory(dirname(path));
+      ensurePrivateFile(path);
       db = new DatabaseSync(path);
       db.exec(`PRAGMA busy_timeout = ${busyTimeoutMs}`);
       initializeSchema(db);

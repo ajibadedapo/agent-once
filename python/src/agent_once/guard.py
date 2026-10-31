@@ -51,6 +51,10 @@ DEFAULT_SETTLE_WINDOW_MS = 10_000
 
 ERROR_RESULT_MESSAGE = "the tool returned an error result"
 SYNC_EXECUTE_AWAITABLE = "execute returned an awaitable; use Guard.arun for async tools"
+SYNC_EXECUTE_SCHEDULED = (
+    "execute returned an already scheduled awaitable that may still run; "
+    "use Guard.arun for async tools"
+)
 SYNC_RECONCILER_AWAITABLE = (
     "the reconciler returned an awaitable; use Guard.arun for async reconcilers"
 )
@@ -137,6 +141,13 @@ def _replayed(event: LedgerEvent, reason: str) -> GuardResult:
 def _discard_awaitable(value: object) -> None:
     if inspect.iscoroutine(value):
         value.close()
+
+
+def _sync_awaitable_outcome(value: object) -> ToolOutcome:
+    if inspect.iscoroutine(value):
+        value.close()
+        return ToolOutcome.not_dispatched(SYNC_EXECUTE_AWAITABLE)
+    return ToolOutcome.transport_error(SYNC_EXECUTE_SCHEDULED)
 
 
 def _checked_outcome(value: object) -> ToolOutcome:
@@ -339,8 +350,7 @@ class Guard:
                         thrown.append(error)
                         return ToolOutcome.transport_error(str(error))
                     if inspect.isawaitable(value):
-                        _discard_awaitable(value)
-                        return ToolOutcome.not_dispatched(SYNC_EXECUTE_AWAITABLE)
+                        return _sync_awaitable_outcome(value)
                     return ToolOutcome.ok(cast(JsonValue, value))
 
                 return cast(R, _returned(self.run(call_for(args, kwargs), execute), thrown))
@@ -362,8 +372,7 @@ class Guard:
         except Exception as error:
             return ToolOutcome.transport_error(str(error))
         if inspect.isawaitable(value):
-            _discard_awaitable(value)
-            return ToolOutcome.not_dispatched(SYNC_EXECUTE_AWAITABLE)
+            return _sync_awaitable_outcome(value)
         return _checked_outcome(value)
 
     async def _invoke_async(self, execute: Execute, context: ExecuteContext) -> ToolOutcome:

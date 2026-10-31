@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
@@ -41,6 +41,26 @@ describe('JsonlEvidenceSink', () => {
       event({ kind: 'state', detail: { state: 'intended', occurrence: 0 } }),
     ]);
     expect(lines.slice(0, 2).every((line) => line.startsWith('{"v":1,'))).toBe(true);
+  });
+
+  test.skipIf(process.platform === 'win32')('creates the directory 0o700 and the file 0o600', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'agent-once-evidence-'));
+    directories.push(directory);
+    const home = join(directory, 'home');
+    const path = join(home, 'events.jsonl');
+    new JsonlEvidenceSink(path).emit(event());
+    expect(statSync(home).mode & 0o777).toBe(0o700);
+    expect(statSync(path).mode & 0o777).toBe(0o600);
+  });
+
+  test.skipIf(process.platform === 'win32')('keeps an existing stricter file mode', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'agent-once-evidence-'));
+    directories.push(directory);
+    const path = join(directory, 'events.jsonl');
+    writeFileSync(path, '');
+    chmodSync(path, 0o200);
+    new JsonlEvidenceSink(path).emit(event());
+    expect(statSync(path).mode & 0o777).toBe(0o200);
   });
 });
 

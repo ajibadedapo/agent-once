@@ -53,7 +53,7 @@ except ActionInDoubt as doubt:
 - The wrapped function returns the result, the recorded result on a replay, or raises: `ActionInDoubt` (with `.doubt` and `.blocked`) when in doubt or blocked, the function's own exception, or `GuardedCallFailedError`.
 - Without `session_key`, the session is `AGENT_ONCE_SESSION` when set (explicit), else `python:<cwd>` (default).
 - On methods, `self` or `cls` is left out of identity: two instances calling the same method with equal arguments share an intent (a replay, never a duplicate). Pass `session_key` or `intent_key` when instances stand for different intents.
-- A sync function that returns an awaitable is refused (recorded as not dispatched); decorate the `async def` instead.
+- A sync function that returns a coroutine is refused (the coroutine is closed unrun and recorded as not dispatched). One that returns an already scheduled awaitable, such as a `Task` or `Future`, is recorded as a transport error, so an identical retry is held because the scheduled work may still land. Decorate the `async def` instead.
 - Arguments and return values should be JSON values. Arguments that cannot be canonicalized, including integers a double cannot represent exactly (many above 2^53), raise `CanonicalizationError` before anything runs, because both cores hash numbers as IEEE 754 doubles; pass large ids as strings. A return value that cannot be canonicalized is still returned, but the ledger stores no result for it (`result_error`), so a later replay returns `None`.
 
 ## Running a call

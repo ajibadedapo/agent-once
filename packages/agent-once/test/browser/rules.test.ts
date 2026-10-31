@@ -269,6 +269,54 @@ describe('browserCallRule', () => {
     }
   });
 
+  test('scripts that click, submit, dispatch events or send requests are guarded with page_url and code identity in both profiles', () => {
+    const cases = [
+      ['playwright', 'browser_evaluate', { function: "() => document.querySelector('#go').click()" }, 'standard'],
+      ['playwright', 'browser_evaluate', { function: '() => document.forms[0].requestSubmit()' }, 'standard'],
+      ['playwright', 'browser_evaluate', { function: "() => fetch('/api/pay', { method: 'POST' })" }, 'money'],
+      ['playwright', 'browser_run_code_unsafe', { code: "async (page) => { await page.getByRole('button', { name: 'Place order' }).click(); }" }, 'money'],
+      ['playwright', 'browser_evaluate', { function: '() => window.app.publishDraft' }, 'irreversible'],
+      ['chrome-devtools', 'evaluate_script', { function: "() => navigator.sendBeacon('/log', 'x')" }, 'irreversible'],
+      ['chrome-devtools', 'evaluate_script', { function: "() => { const x = new XMLHttpRequest(); x.open('POST', '/a'); x.send(); }" }, 'irreversible'],
+      ['chrome-devtools', 'evaluate_script', { function: "(el) => el.dispatchEvent(new MouseEvent('mousedown'))", args: [{ uid: '1_5' }] }, 'standard'],
+      ['chrome-devtools', 'evaluate_script', { function: '() => document.forms[0].submit()' }, 'standard'],
+    ] as const;
+    for (const [profile, tool, args, toolClass] of cases) {
+      const rule = browserCallRule(profile, tool, args, pageAfter(profile, 'snapshot'), DEFAULT_BROWSER_CONFIG);
+      expect(rule, `${tool} ${JSON.stringify(args)}`).toEqual({
+        policy: toolClass === 'standard' ? 'guard' : 'block-on-doubt',
+        toolClass,
+        extraIdentity: { page_url: `${originOf(profile)}/checkout`, label: '' },
+      });
+    }
+  });
+
+  test('scripts without a side-effect call or word pass in both profiles', () => {
+    for (const [profile, tool, args] of [
+      ['playwright', 'browser_evaluate', { function: '() => document.title' }],
+      ['playwright', 'browser_evaluate', { function: '(el) => el.textContent', element: 'Place order button', target: 'e5' }],
+      ['playwright', 'browser_run_code_unsafe', { code: 'async (page) => page.title()' }],
+      ['playwright', 'browser_run_code_unsafe', {}],
+      ['chrome-devtools', 'evaluate_script', { function: '() => document.querySelectorAll("a").length' }],
+    ] as const) {
+      expect(browserCallRule(profile, tool, args, pageAfter(profile, 'snapshot'), DEFAULT_BROWSER_CONFIG).policy, tool).toBe('pass');
+    }
+  });
+
+  test('script identity is the page and the code text, not the element refs', () => {
+    const page = pageAfter('playwright', 'snapshot');
+    const hash = (args: Record<string, unknown>): string => {
+      const rule = browserCallRule('playwright', 'browser_evaluate', args, page, DEFAULT_BROWSER_CONFIG);
+      return intentHash({ sessionKey: 's', tool: 'browser_evaluate', projectedArgs: projectArgs(args, undefined, BROWSER_VOLATILE_KEYS, rule.extraIdentity) });
+    };
+    const click = '(el) => el.click()';
+    expect(hash({ function: click, element: 'Place order button', target: 'e5' })).toBe(hash({ function: click, element: 'the button', target: 'e9' }));
+    expect(hash({ function: click, target: 'e5' })).not.toBe(hash({ function: '(el) => { el.click(); }', target: 'e5' }));
+    const elsewhere = pageAfter('playwright', 'form-snapshot');
+    const other = browserCallRule('playwright', 'browser_evaluate', { function: click }, elsewhere, DEFAULT_BROWSER_CONFIG);
+    expect(other.extraIdentity?.page_url).toBe(`${originOf('playwright')}/account/details`);
+  });
+
   test('a configured capture regex reads the order reference from the last snapshot', () => {
     for (const profile of ['playwright', 'chrome-devtools'] as const) {
       const page = pageAfter(profile, 'snapshot');

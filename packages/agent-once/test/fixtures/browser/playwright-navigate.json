@@ -1,0 +1,8 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "### Ran Playwright code\n```js\nawait page.goto('http://127.0.0.1:55084/checkout?session=abc#top');\n```\n### Page\n- Page URL: http://127.0.0.1:55084/checkout?session=abc#top\n- Page Title: Checkout\n- Console: 1 errors, 0 warnings\n### Snapshot\n- [Snapshot](.playwright-mcp/page-2026-10-31T20-06-54-787Z.yml)\n### Events\n- New console entries: .playwright-mcp/console-2026-10-31T20-06-54-722Z.log#L1"
+    }
+  ]
+}

@@ -2,7 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { Guard } from '../../guard/guard.js';
 import { createHumanResolver } from '../../mcp/doubt/human-resolver.js';
-import { createProxy, type RunningProxy } from '../../mcp/proxy.js';
+import type { AgentOnceConfig } from '../../config/schema.js';
+import { browserExtension } from '../../mcp/browser/extension.js';
+import { createProxy, type ProxyExtension, type RunningProxy } from '../../mcp/proxy.js';
+import { readBackExtension } from '../../mcp/read-back-reconciler.js';
+import { findToolRule } from '../../mcp/tool-policy.js';
 import { UpstreamStdioTransport } from '../../mcp/upstream.js';
 import { SESSION_ENV } from '../../mcp/meta.js';
 import { systemClock } from '../../time/clock.js';
@@ -20,6 +24,12 @@ function splitAtSeparator(args: string[]): { options: string[]; server: string[]
   const separator = args.indexOf('--');
   if (separator === -1) throw new CliExit(EXIT_USAGE, MCP_USAGE);
   return { options: args.slice(0, separator), server: args.slice(separator + 1) };
+}
+
+export function proxyExtensions(config: AgentOnceConfig, command: string[]): ProxyExtension[] {
+  const extensions = [readBackExtension(config)];
+  if (config.browser.enabled !== false) extensions.push(browserExtension(config.browser, { command, toolRule: (tool) => findToolRule(tool, config) }));
+  return extensions;
 }
 
 function closeOnShutdown(proxy: RunningProxy): () => void {
@@ -62,6 +72,7 @@ export async function runMcp(args: string[], io: CliIo): Promise<number> {
       clock: systemClock,
       cwd: io.cwd,
       env,
+      extensions: proxyExtensions(config, server),
     });
   } catch (error) {
     store.close();

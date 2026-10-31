@@ -146,6 +146,31 @@ describe('agent-once mcp', () => {
     expect(confirmed?.sessionKey).toBe('cli-run');
     expect(existsSync(join(home, 'events.jsonl'))).toBe(true);
   }, 30_000);
+
+  test('cli mcp reconciles a doubtful retry through the configured read-back', async () => {
+    const home = tempDir();
+    const configPath = join(home, 'agent-once.json');
+    writeFileSync(configPath, JSON.stringify({ tools: { increment: { readBack: { steps: [{ tool: 'read_count', args: {} }], happened: 'count=1$' } } } }));
+    const transport = new UpstreamStdioTransport({
+      command: process.execPath,
+      args: [CLI, 'mcp', '--config', configPath, '--session', 'cli-read-back', '--', process.execPath, FIXTURE],
+      env: { ...(process.env as Record<string, string>), AGENT_ONCE_HOME: home, COUNTER_STATE: join(home, 'counter.json') },
+      cwd: home,
+      stderr: 'ignore',
+    });
+    const client = new Client({ name: 'cli-test', version: '1.0.0' });
+    await client.connect(transport);
+    try {
+      const failed = await client.callTool({ name: 'increment', arguments: { fail: true } });
+      expect(failed.isError).toBe(true);
+      const retry = await client.callTool({ name: 'increment', arguments: { fail: true } });
+      expect((retry._meta?.['io.github.ajibadedapo/agent-once'] as { status: string }).status).toBe('replayed');
+      const count = await client.callTool({ name: 'read_count', arguments: {} });
+      expect(count.content).toEqual([{ type: 'text', text: 'count=1' }]);
+    } finally {
+      await client.close();
+    }
+  }, 30_000);
 });
 
 describe('agent-once resolve', () => {

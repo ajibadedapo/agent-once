@@ -1,0 +1,8 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "Successfully clicked on the element\nPage navigated to chrome-error://chromewebdata/.\n## Latest page snapshot\nuid=3_0 RootWebArea \"127.0.0.1\" url=\"chrome-error://chromewebdata/\"\n  uid=3_1 heading \"This site can’t be reached\" level=\"1\"\n  uid=3_2 \"The web page at \"\n  uid=3_3 \"http://127.0.0.1:9/?\"\n  uid=3_4 \" might be temporarily down or it may have moved permanently to a new web address.\"\n  uid=3_5 \"ERR_UNSAFE_PORT\"\n"
+    }
+  ]
+}

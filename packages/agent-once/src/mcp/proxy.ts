@@ -33,6 +33,7 @@ import type { ExitAwareTransport } from './upstream.js';
 export interface ProxyContext {
   readonly clientCapabilities: ClientCapabilities;
   readonly clientInfo?: Implementation;
+  readonly serverInfo?: Implementation;
   readonly clock: Clock;
   requestClient(method: string, params: unknown, options?: { signal?: AbortSignal }): Promise<unknown>;
   callUpstreamTool(name: string, args: Record<string, unknown>): Promise<CallToolResult>;
@@ -42,6 +43,7 @@ export interface ProxyExtension {
   onClientRequest?(msg: JSONRPCRequest, ctx: ProxyContext): void;
   onUpstreamResult?(tool: string, args: Record<string, unknown>, result: CallToolResult, ctx: ProxyContext): void;
   adjustCall?(call: GuardedCall, ctx: ProxyContext): GuardedCall;
+  onDispatch?(call: GuardedCall, actionId: string, ctx: ProxyContext): void;
   classifyOutcome?(tool: string, result: CallToolResult): ToolOutcome | undefined;
   reconcilerFor?(tool: string, args: Record<string, unknown>, ctx: ProxyContext): Reconciler | undefined;
 }
@@ -104,7 +106,7 @@ function isRecord(value: unknown): value is Params {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function resultText(result: CallToolResult): string {
+export function resultText(result: CallToolResult): string {
   return (Array.isArray(result.content) ? result.content : [])
     .map((item) => (item.type === 'text' ? item.text : ''))
     .filter((text) => text !== '')
@@ -152,6 +154,7 @@ class McpProxy implements RunningProxy {
   private toolsGeneration = 0;
   private clientCapabilities: ClientCapabilities = {};
   private clientInfo: Implementation | undefined;
+  private serverInfo: Implementation | undefined;
   private upstreamClosed = false;
   private closing = false;
 
@@ -196,6 +199,9 @@ class McpProxy implements RunningProxy {
       },
       get clientInfo() {
         return proxy.clientInfo;
+      },
+      get serverInfo() {
+        return proxy.serverInfo;
       },
       get clock() {
         return proxy.clock;
@@ -386,6 +392,7 @@ class McpProxy implements RunningProxy {
 
   private async dispatch(entry: GuardedRequest, call: GuardedCall, params: Params, context: ExecuteContext): Promise<ToolOutcome> {
     entry.actionId = context.actionId;
+    if (context.actionId !== undefined) this.notifyDispatch(call, context.actionId);
     if (this.upstreamClosed) return { kind: 'not_dispatched', error: 'the MCP server is not running' };
     const id = this.upstreamRequests.nextId();
     const response = this.upstreamRequests.expectOrAbandon(id);
@@ -527,6 +534,10 @@ class McpProxy implements RunningProxy {
       this.notifyResult(request.tool, request.args ?? {}, result as CallToolResult);
       return result;
     }
+    if (request.method === 'initialize') {
+      this.serverInfo = isRecord(result.serverInfo) ? (result.serverInfo as Implementation) : undefined;
+      return result;
+    }
     if (request.method !== 'tools/list') return result;
     this.captureTools(result.tools);
     if (this.toolsState === 'backoff') this.toolsState = 'unknown';
@@ -536,6 +547,16 @@ class McpProxy implements RunningProxy {
       return result;
     }
     return { ...result, tools: [...(result.tools as unknown[]), RESOLVE_TOOL] };
+  }
+
+  private notifyDispatch(call: GuardedCall, actionId: string): void {
+    for (const extension of this.extensions) {
+      try {
+        extension.onDispatch?.(call, actionId, this.context);
+      } catch (error) {
+        this.log(`agent-once: an extension failed before dispatching ${call.tool}: ${errorMessage(error)}`);
+      }
+    }
   }
 
   private notifyResult(tool: string, args: Params, result: CallToolResult): void {

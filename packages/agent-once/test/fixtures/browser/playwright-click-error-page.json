@@ -1,0 +1,8 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "### Ran Playwright code\n```js\nawait page.getByRole('button', { name: 'Pay now' }).click();\n```\n### Page\n- Page URL: chrome-error://chromewebdata/\n- Page Title: 127.0.0.1\n### Snapshot\n- [Snapshot](.playwright-mcp/page-2026-10-31T20-06-55-474Z.yml)"
+    }
+  ]
+}

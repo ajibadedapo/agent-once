@@ -1,6 +1,7 @@
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import type { JsonValue } from '../canonical/jcs.js';
 import type { IdentityRule } from '../identity/project-args.js';
+import { DEFAULT_IRREVERSIBLE_PATTERNS, DEFAULT_MONEY_PATTERNS, DEFAULT_SIDE_EFFECT_PATTERNS } from '../guard/classify.js';
 import { defaultLedgerPath } from '../ledger/sqlite-store.js';
 import type { ToolClass } from '../ledger/types.js';
 
@@ -25,10 +26,36 @@ export interface ToolRule {
   notDispatchedErrors?: string[];
 }
 
+export interface BrowserCapture {
+  urlPattern: string;
+  regex: string;
+}
+
+export type BrowserReadBackRule = { urlPattern: string } & ReadBackRule;
+
 export interface BrowserConfig {
   enabled: 'auto' | boolean;
-  [key: string]: unknown;
+  sideEffectPatterns: string[];
+  moneyPatterns: string[];
+  irreversiblePatterns: string[];
+  notDispatchedErrors: string[];
+  successMarkers: string[];
+  failureMarkers: string[];
+  capture: BrowserCapture[];
+  readBack: BrowserReadBackRule[];
 }
+
+export const DEFAULT_BROWSER_CONFIG: Readonly<BrowserConfig> = Object.freeze({
+  enabled: 'auto',
+  sideEffectPatterns: [...DEFAULT_SIDE_EFFECT_PATTERNS],
+  moneyPatterns: [...DEFAULT_MONEY_PATTERNS],
+  irreversiblePatterns: [...DEFAULT_IRREVERSIBLE_PATTERNS],
+  notDispatchedErrors: ['Ref \\S+ not found', 'Element uid \\S+ not found', 'No element', 'not attached', 'Element is not visible', 'stale'],
+  successMarkers: ['order (number|#|confirmed)', 'booking (confirmed|reference)', '(message|email) sent', 'ticket .* created', 'thank you for your (order|purchase|booking)'],
+  failureMarkers: ['ERR_[A-Z_]+', 'This site can.t be reached', '(502|503|504) ', 'timed out'],
+  capture: [],
+  readBack: [],
+});
 
 export interface ApprovalWebhookConfig {
   url: string;
@@ -207,7 +234,10 @@ function parseIdentity(reader: Reader, raw: unknown, path: string): Exclude<Iden
 }
 
 function parseReadBack(reader: Reader, raw: unknown, path: string): ReadBackRule {
-  const fields = reader.object(raw, path, ['steps', 'happened', 'notHappened']);
+  return readBackFields(reader, reader.object(raw, path, ['steps', 'happened', 'notHappened']), path);
+}
+
+function readBackFields(reader: Reader, fields: Fields, path: string): ReadBackRule {
   const stepsPath = pointer(path, 'steps');
   if (!Array.isArray(fields.steps)) reader.fail(stepsPath, `expected an array of steps, got ${describe(fields.steps)}`);
   const steps = fields.steps.map((item: unknown, index: number): ReadBackStep => {
@@ -245,11 +275,54 @@ function parseTools(reader: Reader, raw: unknown): Record<string, ToolRule> {
   return tools;
 }
 
+const BROWSER_KEYS = [
+  'enabled',
+  'sideEffectPatterns',
+  'moneyPatterns',
+  'irreversiblePatterns',
+  'notDispatchedErrors',
+  'successMarkers',
+  'failureMarkers',
+  'capture',
+  'readBack',
+] as const;
+
+function parseBrowserList<T>(reader: Reader, raw: unknown, path: string, item: (value: unknown, itemPath: string) => T): T[] {
+  if (!Array.isArray(raw)) reader.fail(path, `expected an array, got ${describe(raw)}`);
+  return raw.map((value: unknown, index: number) => item(value, pointer(path, index)));
+}
+
 function parseBrowser(reader: Reader, raw: unknown): BrowserConfig {
-  const fields = reader.object(raw ?? {}, '/browser');
+  const fields = reader.object(raw ?? {}, '/browser', BROWSER_KEYS);
   const enabled = fields.enabled === undefined ? 'auto' : fields.enabled;
   if (enabled !== 'auto' && typeof enabled !== 'boolean') reader.fail('/browser/enabled', `expected "auto", true or false, got ${describe(enabled)}`);
-  return { ...fields, enabled };
+  const words = (key: 'sideEffectPatterns' | 'moneyPatterns' | 'irreversiblePatterns'): string[] =>
+    fields[key] === undefined ? [...DEFAULT_BROWSER_CONFIG[key]] : reader.strings(fields[key], `/browser/${key}`);
+  const regexes = (key: 'notDispatchedErrors' | 'successMarkers' | 'failureMarkers'): string[] =>
+    fields[key] === undefined ? [...DEFAULT_BROWSER_CONFIG[key]] : reader.regexes(fields[key], `/browser/${key}`);
+  return {
+    enabled,
+    sideEffectPatterns: words('sideEffectPatterns'),
+    moneyPatterns: words('moneyPatterns'),
+    irreversiblePatterns: words('irreversiblePatterns'),
+    notDispatchedErrors: regexes('notDispatchedErrors'),
+    successMarkers: regexes('successMarkers'),
+    failureMarkers: regexes('failureMarkers'),
+    capture:
+      fields.capture === undefined
+        ? []
+        : parseBrowserList(reader, fields.capture, '/browser/capture', (value, path) => {
+            const capture = reader.object(value, path, ['urlPattern', 'regex']);
+            return { urlPattern: reader.regex(capture.urlPattern, pointer(path, 'urlPattern')), regex: reader.regex(capture.regex, pointer(path, 'regex')) };
+          }),
+    readBack:
+      fields.readBack === undefined
+        ? []
+        : parseBrowserList(reader, fields.readBack, '/browser/readBack', (value, path) => {
+            const rule = reader.object(value, path, ['urlPattern', 'steps', 'happened', 'notHappened']);
+            return { urlPattern: reader.regex(rule.urlPattern, pointer(path, 'urlPattern')), ...readBackFields(reader, rule, path) };
+          }),
+  };
 }
 
 export function parseConfig(raw: unknown, ctx: ConfigContext): AgentOnceConfig {

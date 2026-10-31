@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import { loadConfig } from '../src/config/load.js';
-import { ConfigError } from '../src/config/schema.js';
+import { ConfigError, DEFAULT_BROWSER_CONFIG } from '../src/config/schema.js';
 import { findToolRule } from '../src/mcp/tool-policy.js';
 
 const tempDirs: string[] = [];
@@ -43,7 +43,7 @@ describe('loadConfig', () => {
       evidence: { jsonl: '/state/ao/events.jsonl' },
       exposeResolveTool: true,
       tools: {},
-      browser: { enabled: 'auto' },
+      browser: { ...DEFAULT_BROWSER_CONFIG },
     });
   });
 
@@ -53,7 +53,7 @@ describe('loadConfig', () => {
     expect(config.evidence.jsonl).toBe('/home/user/.agent-once/events.jsonl');
   });
 
-  test('a full config is validated, relative paths resolve from the config file and browser keys pass through', () => {
+  test('a full config is validated, relative paths resolve from the config file and browser keys replace their defaults', () => {
     const { dir, file } = writeConfig(
       JSON.stringify({
         ledger: { path: 'state/ledger.db', expiryHours: 2, retryWindowSeconds: 60, settleSeconds: 5, storeArgs: false },
@@ -69,7 +69,12 @@ describe('loadConfig', () => {
             readBack: { steps: [{ tool: 'list_tickets', args: { title: '{{args.title}}' } }], happened: '{{args.title}}' },
           },
         },
-        browser: { enabled: false, successMarkers: ['Thanks'] },
+        browser: {
+          enabled: false,
+          successMarkers: ['Thanks'],
+          capture: [{ urlPattern: '/checkout', regex: 'Order (\\w+)' }],
+          readBack: [{ urlPattern: '/checkout', steps: [{ tool: 'browser_navigate', args: { url: '{{origin}}/orders' } }], happened: '{{captured}}' }],
+        },
       }),
     );
     expect(loadConfig({ path: 'agent-once.json', cwd: dir, env: {}, homedir: '/home/user' })).toEqual({
@@ -86,7 +91,13 @@ describe('loadConfig', () => {
           readBack: { steps: [{ tool: 'list_tickets', args: { title: '{{args.title}}' } }], happened: '{{args.title}}' },
         },
       },
-      browser: { enabled: false, successMarkers: ['Thanks'] },
+      browser: {
+        ...DEFAULT_BROWSER_CONFIG,
+        enabled: false,
+        successMarkers: ['Thanks'],
+        capture: [{ urlPattern: '/checkout', regex: 'Order (\\w+)' }],
+        readBack: [{ urlPattern: '/checkout', steps: [{ tool: 'browser_navigate', args: { url: '{{origin}}/orders' } }], happened: '{{captured}}' }],
+      },
     });
     expect(file).toBe(join(dir, 'agent-once.json'));
   });
@@ -113,6 +124,9 @@ describe('loadConfig', () => {
     expect(configError(JSON.stringify({ tools: { submit: { readBack: { steps: [], notHappened: '[' } } } })).path).toBe(
       '/tools/submit/readBack/notHappened',
     );
+    expect(configError(JSON.stringify({ browser: { successMarkers: ['ok', '(order'] } })).path).toBe('/browser/successMarkers/1');
+    expect(configError(JSON.stringify({ browser: { capture: [{ urlPattern: '/pay', regex: '[' }] } })).path).toBe('/browser/capture/0/regex');
+    expect(configError(JSON.stringify({ browser: { readBack: [{ urlPattern: '(', steps: [] }] } })).path).toBe('/browser/readBack/0/urlPattern');
   });
 
   test('unknown keys are rejected at every level', () => {
@@ -122,6 +136,9 @@ describe('loadConfig', () => {
     expect(configError(JSON.stringify({ tools: { x: { readBack: { steps: [{ tool: 'a', args: {}, extra: 1 }] } } } })).path).toBe(
       '/tools/x/readBack/steps/0/extra',
     );
+    expect(configError(JSON.stringify({ browser: { succesMarkers: [] } })).path).toBe('/browser/succesMarkers');
+    expect(configError(JSON.stringify({ browser: { readBack: [{ urlPattern: '/x', steps: [], when: 1 }] } })).path).toBe('/browser/readBack/0/when');
+    expect(configError(JSON.stringify({ browser: { capture: {} } })).path).toBe('/browser/capture');
   });
 
   test('wrong types, ranges and shapes are rejected', () => {

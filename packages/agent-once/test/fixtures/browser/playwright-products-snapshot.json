@@ -1,0 +1,8 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "### Page\n- Page URL: http://127.0.0.1:55084/products\n- Page Title: Products\n### Snapshot\n```yaml\n- generic [active] [ref=f4e1]:\n  - heading \"Products\" [level=1] [ref=f4e2]\n  - paragraph [ref=f4e3]: Blue mug\n  - link \"Next page\" [ref=f4e4] [cursor=pointer]:\n    - /url: /products?page=2\n```"
+    }
+  ]
+}

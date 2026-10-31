@@ -1,0 +1,8 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "### Page\n- Page URL: http://127.0.0.1:55084/checkout\n- Page Title: Checkout\n### Snapshot\n```yaml\n- generic [active] [ref=f2e1]:\n  - heading \"Checkout\" [level=1] [ref=f2e2]\n  - paragraph [ref=f2e3]: \"Order reference: AO-48213\"\n  - paragraph [ref=f2e4]: \"Total: 42.00 GBP\"\n  - button \"Place order\" [ref=f2e6]\n  - link \"Next page\" [ref=f2e7] [cursor=pointer]:\n    - /url: /checkout?page=2\n  - button \"Pay now\" [ref=f2e9]\n```"
+    }
+  ]
+}

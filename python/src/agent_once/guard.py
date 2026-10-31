@@ -248,7 +248,12 @@ class Guard:
         loop = asyncio.get_running_loop()
         joined = self._in_flight.get(identity.hash)
         if joined is not None and joined.get_loop() is loop:
-            return await asyncio.shield(joined)
+            try:
+                return await asyncio.shield(joined)
+            except asyncio.CancelledError:
+                if not joined.cancelled():
+                    raise
+            return await self.arun(call, execute)
         shared: asyncio.Future[GuardResult] = loop.create_future()
         self._in_flight[identity.hash] = shared
         try:
@@ -289,14 +294,19 @@ class Guard:
         def decorate(fn: Callable[P, R]) -> Callable[P, R]:
             tool_name = name if name is not None else str(getattr(fn, "__name__", "tool"))
             signature = inspect.signature(fn)
+            parameters = list(signature.parameters)
+            bound_first = parameters[0] if parameters[:1] in (["self"], ["cls"]) else None
 
             def call_for(args: tuple[object, ...], kwargs: dict[str, object]) -> GuardedCall:
                 bound = signature.bind(*args, **kwargs)
                 bound.apply_defaults()
+                identity_args = dict(bound.arguments)
+                if bound_first is not None:
+                    identity_args.pop(bound_first, None)
                 session, explicit = _default_session(session_key)
                 return GuardedCall(
                     tool=tool_name,
-                    args=dict(bound.arguments),
+                    args=identity_args,
                     session_key=session,
                     session_explicit=explicit,
                     policy=policy,
@@ -331,10 +341,14 @@ class Guard:
 
                 def execute(_context: ExecuteContext) -> ToolOutcome:
                     try:
-                        return ToolOutcome.ok(cast(JsonValue, fn(*args, **kwargs)))
+                        value = fn(*args, **kwargs)
                     except Exception as error:
                         thrown.append(error)
                         return ToolOutcome.transport_error(str(error))
+                    if inspect.isawaitable(value):
+                        _discard_awaitable(value)
+                        return ToolOutcome.not_dispatched(SYNC_EXECUTE_AWAITABLE)
+                    return ToolOutcome.ok(cast(JsonValue, value))
 
                 return cast(R, _returned(self.run(call_for(args, kwargs), execute), thrown))
 

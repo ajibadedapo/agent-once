@@ -78,9 +78,12 @@ def _number(value: float, path: str) -> str:
 
 def _integer(value: int, path: str) -> str:
     try:
-        return format_number(float(value))
+        as_double = float(value)
     except OverflowError:
         raise CanonicalizationError(path, "an integer too large for a double") from None
+    if int(as_double) != value:
+        raise CanonicalizationError(path, "an integer that a double cannot represent exactly")
+    return format_number(as_double)
 
 
 def _serialize(value: object, path: str, ancestors: set[int]) -> str:

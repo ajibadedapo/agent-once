@@ -4,6 +4,7 @@ import json
 import os
 import re
 import sqlite3
+import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, TypeVar
@@ -206,6 +207,7 @@ class SqliteLedgerStore:
     def __init__(self, connection: sqlite3.Connection) -> None:
         self._connection: sqlite3.Connection | None = connection
         self._active: _Transaction | None = None
+        self._lock = threading.RLock()
 
     @classmethod
     def open(
@@ -215,7 +217,9 @@ class SqliteLedgerStore:
         connection: sqlite3.Connection | None = None
         try:
             os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-            connection = sqlite3.connect(path, timeout=timeout_ms / 1000, isolation_level=None)
+            connection = sqlite3.connect(
+                path, timeout=timeout_ms / 1000, isolation_level=None, check_same_thread=False
+            )
             connection.row_factory = sqlite3.Row
             connection.execute(f"PRAGMA busy_timeout = {timeout_ms}")
             _initialize_schema(connection)
@@ -232,6 +236,10 @@ class SqliteLedgerStore:
             raise _unavailable(error, f"cannot open {path}") from error
 
     def transact(self, fn: Callable[[LedgerTx], T]) -> T:
+        with self._lock:
+            return self._transact_locked(fn)
+
+    def _transact_locked(self, fn: Callable[[LedgerTx], T]) -> T:
         connection = self._connection_or_raise()
         if self._active is not None:
             raise LedgerUsageError(NESTED_TRANSACT)
@@ -258,6 +266,10 @@ class SqliteLedgerStore:
             self._active = None
 
     def find_action(self, action_id: str) -> LedgerEvent | None:
+        with self._lock:
+            return self._find_action_locked(action_id)
+
+    def _find_action_locked(self, action_id: str) -> LedgerEvent | None:
         connection = self._connection_or_raise()
         try:
             row = connection.execute(FIND_ACTION_SQL, (action_id,)).fetchone()
@@ -266,6 +278,10 @@ class SqliteLedgerStore:
         return None if row is None else _to_event(row)
 
     def list_in_doubt(self, now_ms: int) -> list[LedgerEvent]:
+        with self._lock:
+            return self._list_in_doubt_locked(now_ms)
+
+    def _list_in_doubt_locked(self, now_ms: int) -> list[LedgerEvent]:
         connection = self._connection_or_raise()
         try:
             rows = connection.execute(IN_DOUBT_SQL, (now_ms,)).fetchall()
@@ -274,6 +290,10 @@ class SqliteLedgerStore:
         return [_to_event(row) for row in rows]
 
     def settings(self) -> SqliteLedgerSettings:
+        with self._lock:
+            return self._settings_locked()
+
+    def _settings_locked(self) -> SqliteLedgerSettings:
         connection = self._connection_or_raise()
         return SqliteLedgerSettings(
             journal_mode=str(_pragma(connection, "journal_mode")),
@@ -282,6 +302,10 @@ class SqliteLedgerStore:
         )
 
     def close(self) -> None:
+        with self._lock:
+            self._close_locked()
+
+    def _close_locked(self) -> None:
         connection, self._connection = self._connection, None
         if connection is not None:
             connection.close()

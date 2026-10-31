@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TypeVar
@@ -50,8 +51,13 @@ class MemoryLedgerStore:
         self._next_seq = 1
         self._closed = False
         self._in_transaction = False
+        self._lock = threading.RLock()
 
     def transact(self, fn: Callable[[LedgerTx], T]) -> T:
+        with self._lock:
+            return self._transact_locked(fn)
+
+    def _transact_locked(self, fn: Callable[[LedgerTx], T]) -> T:
         self._assert_open()
         if self._in_transaction:
             raise LedgerUsageError(NESTED_TRANSACT)
@@ -70,6 +76,10 @@ class MemoryLedgerStore:
             self._in_transaction = False
 
     def find_action(self, action_id: str) -> LedgerEvent | None:
+        with self._lock:
+            return self._find_action_locked(action_id)
+
+    def _find_action_locked(self, action_id: str) -> LedgerEvent | None:
         self._assert_open()
         for stored in reversed(self._events):
             if stored.event.action_id == action_id:
@@ -77,6 +87,10 @@ class MemoryLedgerStore:
         return None
 
     def list_in_doubt(self, now_ms: int) -> list[LedgerEvent]:
+        with self._lock:
+            return self._list_in_doubt_locked(now_ms)
+
+    def _list_in_doubt_locked(self, now_ms: int) -> list[LedgerEvent]:
         self._assert_open()
         newest: dict[str, _Stored] = {}
         for stored in self._events:

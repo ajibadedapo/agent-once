@@ -154,7 +154,7 @@ def test_decision_vectors(vector: dict[str, Any]) -> None:
         (1e-7, "1e-7"),
         (5e-324, "5e-324"),
         (123456789012345680000.0, "123456789012345680000"),
-        (123456789012345680000, "123456789012345680000"),
+        (int(123456789012345680000.0), "123456789012345680000"),
         (1e20, "100000000000000000000"),
         (1e-6, "0.000001"),
         (1.5e-7, "1.5e-7"),
@@ -162,7 +162,8 @@ def test_decision_vectors(vector: dict[str, Any]) -> None:
         (0.1 + 0.2, "0.30000000000000004"),
         (-0.0, "0"),
         (2.0, "2"),
-        (9007199254740993, "9007199254740992"),
+        (9007199254740992, "9007199254740992"),
+        (-(2**60), "-1152921504606847000"),
         (1.7976931348623157e308, "1.7976931348623157e+308"),
     ],
 )
@@ -196,6 +197,8 @@ def test_non_finite_numbers_name_the_path() -> None:
         ({"text": "a\ud800"}, "$.text"),
         ({"outer": {"\udc00": 1}}, '$.outer["\\udc00"]'),
         ({"huge": 10**400}, "$.huge"),
+        ({"id": 1234567890123456789}, "$.id"),
+        ({"id": 2**53 + 1}, "$.id"),
     ],
 )
 def test_canonical_rejects_values_json_cannot_represent(value: Any, path: str) -> None:
@@ -262,3 +265,13 @@ def test_intent_key_ignores_args_and_action_id_varies() -> None:
 
 
 START_AT = 1_761_912_345_678
+
+
+def test_inexact_integers_never_share_an_intent_hash() -> None:
+    error = thrown_by({"id": 1234567890123456789})
+    assert (
+        str(error)
+        == "cannot canonicalize an integer that a double cannot represent exactly at $.id"
+    )
+    with pytest.raises(CanonicalizationError):
+        intent_hash("s", "t", {"id": 1234567890123456790})

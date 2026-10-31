@@ -25,6 +25,7 @@ from agent_once import (
     MemoryLedgerStore,
     ReconcileContext,
     ReconcileOutcome,
+    SqliteLedgerStore,
     ToolOutcome,
     action_id,
     intent_hash,
@@ -421,14 +422,17 @@ def test_two_concurrent_identical_aruns_dispatch_once_and_share_the_outcome() ->
         gate = asyncio.Event()
         dispatched: list[int] = []
 
+        entered = asyncio.Event()
+
         async def execute(_context: ExecuteContext) -> ToolOutcome:
             dispatched.append(1)
+            entered.set()
             await gate.wait()
             return OK
 
         first = asyncio.ensure_future(s.guard.arun(guarded_call(), execute))
         second = asyncio.ensure_future(s.guard.arun(guarded_call(), execute))
-        await asyncio.sleep(0)
+        await entered.wait()
         gate.set()
         a, b = await asyncio.gather(first, second)
         assert len(dispatched) == 1
@@ -1012,3 +1016,211 @@ def test_a_result_that_cannot_be_canonicalized_is_a_result_error_not_truncated()
         "result_error": "cannot canonicalize the non-finite number NaN at $.ratio",
         "delivery": "delivered",
     }
+
+
+class Abort(BaseException):
+    pass
+
+
+def test_a_cancelled_leader_leaves_its_joiner_with_the_ledger_answer() -> None:
+    async def scenario() -> None:
+        s = setup()
+        entered = asyncio.Event()
+        dispatched: list[int] = []
+
+        async def execute(_context: ExecuteContext) -> ToolOutcome:
+            dispatched.append(1)
+            entered.set()
+            await asyncio.Event().wait()
+            return OK
+
+        leader = asyncio.ensure_future(s.guard.arun(guarded_call(), execute))
+        joiner = asyncio.ensure_future(s.guard.arun(guarded_call(), execute))
+        await entered.wait()
+        leader.cancel()
+        joined = await joiner
+        assert (joined.status, joined.doubt and joined.doubt.reason) == (
+            "in_doubt",
+            "outcome_unknown",
+        )
+        with pytest.raises(asyncio.CancelledError):
+            await leader
+        assert len(dispatched) == 1
+        assert s.guard._in_flight == {}
+
+    asyncio.run(scenario())
+
+
+def test_a_leader_aborting_during_dispatch_leaves_its_joiner_in_doubt() -> None:
+    async def scenario() -> None:
+        s = setup()
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        async def execute(_context: ExecuteContext) -> ToolOutcome:
+            entered.set()
+            await release.wait()
+            raise Abort()
+
+        leader = asyncio.ensure_future(s.guard.arun(guarded_call(), execute))
+        joiner = asyncio.ensure_future(s.guard.arun(guarded_call(), execute))
+        await entered.wait()
+        release.set()
+        with pytest.raises(Abort):
+            await leader
+        assert (await joiner).status == "in_doubt"
+        assert s.guard._in_flight == {}
+
+    asyncio.run(scenario())
+
+
+def test_a_leader_raising_an_error_passes_it_to_its_joiner() -> None:
+    async def scenario() -> None:
+        s = setup()
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        async def execute(_context: ExecuteContext) -> ToolOutcome:
+            entered.set()
+            await release.wait()
+            return OK
+
+        def broken_store() -> None:
+            if s.ledger.transaction_count == 3:
+                raise_unexpected()
+
+        s.ledger.before_transact = broken_store
+        leader = asyncio.ensure_future(s.guard.arun(guarded_call(), execute))
+        joiner = asyncio.ensure_future(s.guard.arun(guarded_call(), execute))
+        await entered.wait()
+        release.set()
+        leader_result = await leader
+        assert leader_result.recorded is False
+        assert await joiner is leader_result
+        assert s.guard._in_flight == {}
+
+    asyncio.run(scenario())
+
+
+def raise_unexpected() -> None:
+    raise RuntimeError("unexpected store failure")
+
+
+def test_decorating_a_callable_that_returns_an_awaitable_records_not_dispatched() -> None:
+    s = setup()
+    ran: list[str] = []
+
+    class AsyncCallable:
+        async def __call__(self, title: str) -> str:
+            ran.append(title)
+            return title
+
+    create = s.guard.tool(name="create_ticket")(AsyncCallable())
+    with pytest.raises(GuardedCallFailedError, match="arun"):
+        create("a")
+    assert ran == []
+    assert s.ledger.last().state == "failed"
+    assert s.ledger.last().detail["failure_kind"] == "not_dispatched"
+
+
+def test_decorated_methods_leave_self_out_of_the_identity() -> None:
+    s = setup()
+
+    class Tickets:
+        def __init__(self, prefix: str) -> None:
+            self.prefix = prefix
+
+        @s.guard.tool(name="create_ticket")
+        def create(self, title: str) -> str:
+            return self.prefix + title
+
+        @classmethod
+        @s.guard.tool(name="create_ticket_cls")
+        def create_cls(cls, title: str) -> str:
+            return title
+
+    assert Tickets("T-").create("a") == "T-a"
+    assert s.ledger.last().args_json == '{"title":"a"}'
+    assert Tickets.create_cls("b") == "b"
+    assert s.ledger.last().args_json == '{"title":"b"}'
+
+
+@pytest.mark.parametrize("kind", ["memory", "sqlite"])
+def test_a_guarded_call_from_a_worker_thread_works(kind: str, tmp_path: Any) -> None:
+    clock = ManualClock(START_MS)
+    store = (
+        MemoryLedgerStore(clock)
+        if kind == "memory"
+        else SqliteLedgerStore.open(str(tmp_path / "ledger.db"), clock)
+    )
+    guard = Guard(store, clock, "run-1", RecordingSink())
+    results: list[GuardResult] = []
+    worker = threading.Thread(
+        target=lambda: results.append(guard.run(guarded_call(), Scripted(OK).execute))
+    )
+    worker.start()
+    worker.join(timeout=30)
+    store.close()
+    assert [result.status for result in results] == ["executed"]
+
+
+@pytest.mark.parametrize("kind", ["memory", "sqlite"])
+def test_two_threads_racing_one_intent_dispatch_exactly_once(kind: str, tmp_path: Any) -> None:
+    clock = ManualClock(START_MS)
+    store = (
+        MemoryLedgerStore(clock)
+        if kind == "memory"
+        else SqliteLedgerStore.open(str(tmp_path / "ledger.db"), clock)
+    )
+    guard = Guard(store, clock, "run-1", RecordingSink())
+    entered = threading.Event()
+    second_done = threading.Event()
+    dispatched: list[str | None] = []
+    results: dict[str, GuardResult] = {}
+
+    def execute(context: ExecuteContext) -> ToolOutcome:
+        dispatched.append(context.action_id)
+        entered.set()
+        second_done.wait(timeout=30)
+        return OK
+
+    first = threading.Thread(
+        target=lambda: results.update(first=guard.run(guarded_call(), execute))
+    )
+    first.start()
+    assert entered.wait(timeout=30)
+    second = threading.Thread(
+        target=lambda: results.update(second=guard.run(guarded_call(), execute))
+    )
+    second.start()
+    second.join(timeout=30)
+    second_done.set()
+    first.join(timeout=30)
+    store.close()
+    assert len(dispatched) == 1
+    assert results["first"].status == "executed"
+    assert results["second"].status == "in_doubt"
+
+
+def test_a_store_serialises_transactions_across_threads() -> None:
+    clock = ManualClock(START_MS)
+    store = MemoryLedgerStore(clock)
+    inside = threading.Event()
+    release = threading.Event()
+    order: list[str] = []
+
+    def hold(_tx: Any) -> None:
+        order.append("first-start")
+        inside.set()
+        release.wait(timeout=30)
+        order.append("first-end")
+
+    holder = threading.Thread(target=lambda: store.transact(hold))
+    holder.start()
+    assert inside.wait(timeout=30)
+    contender = threading.Thread(target=lambda: store.transact(lambda _tx: order.append("second")))
+    contender.start()
+    release.set()
+    holder.join(timeout=30)
+    contender.join(timeout=30)
+    assert order == ["first-start", "first-end", "second"]

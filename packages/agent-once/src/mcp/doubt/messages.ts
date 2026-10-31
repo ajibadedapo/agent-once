@@ -33,3 +33,15 @@ export function blockedToolResult(d: DoubtSubject): CallToolResult {
     statusMeta('blocked', d.actionId, d.toolClass),
   );
 }
+
+export function checkThenRetryToolResult(d: Pick<DoubtInfo, 'actionId' | 'tool'>): CallToolResult {
+  return {
+    content: [
+      {
+        type: 'text',
+        text: `agent-once: the earlier ${d.tool} attempt (action ${d.actionId}) did not happen, so it was not repeated blindly. Check the current state, then call ${d.tool} again if it is still needed.`,
+      },
+    ],
+    _meta: statusMeta('retry_by_agent', d.actionId),
+  };
+}

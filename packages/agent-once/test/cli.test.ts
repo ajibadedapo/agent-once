@@ -1,13 +1,12 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { chaosTargetsPreset } from '../src/chaos/presets.js';
-import { afterEach, beforeAll, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test } from 'vitest';
 import type { LedgerState, NewLedgerEvent } from '../src/ledger/types.js';
 import { SqliteLedgerStore } from '../src/ledger/sqlite-store.js';
 import { resultText } from '../src/mcp/proxy.js';
@@ -27,12 +26,6 @@ function tempDir(): string {
   tempDirs.push(dir);
   return dir;
 }
-
-beforeAll(() => {
-  const tsc = createRequire(import.meta.url).resolve('typescript/bin/tsc');
-  const build = spawnSync(process.execPath, [tsc, '-p', 'tsconfig.build.json'], { cwd: PACKAGE_DIR, encoding: 'utf8' });
-  if (build.status !== 0) throw new Error(`build failed: ${build.stdout}${build.stderr}`);
-}, 120_000);
 
 const children: ChildProcess[] = [];
 

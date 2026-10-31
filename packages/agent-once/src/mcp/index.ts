@@ -18,10 +18,10 @@ export { normalizePageUrl, PageState } from './browser/page-state.js';
 export { detectBrowserProfile, type BrowserProfile } from './browser/profile.js';
 export { browserCallRule, type BrowserCallRule } from './browser/rules.js';
 export { ChainResolver } from './doubt/chain-resolver.js';
-export { DEFAULT_ELICITATION_TIMEOUT_MS, ELICITATION_SCHEMA, ElicitationResolver } from './doubt/elicitation-resolver.js';
+export { DEFAULT_ELICITATION_TIMEOUT_MS, ELICITATION_OUTCOME_FIELD, ELICITATION_SCHEMA, ElicitationResolver } from './doubt/elicitation-resolver.js';
 export { MAX_WEBHOOK_RESPONSE_BYTES, SIGNATURE_HEADER, WebhookResolver, type WebhookResolverConfig } from './doubt/webhook-resolver.js';
 export { createHumanResolver, type HumanResolverOptions } from './doubt/human-resolver.js';
-export { blockedToolResult, doubtQuestion, inDoubtToolResult } from './doubt/messages.js';
+export { blockedToolResult, checkThenRetryToolResult, doubtQuestion, inDoubtToolResult } from './doubt/messages.js';
 export { ACTION_META_KEY, INTENT_META_KEY, MANDATE_META_KEY, RESOLVE_TOOL_NAME, SESSION_ENV, SESSION_META_KEY, STATUS_META_KEY } from './meta.js';
 export { loadConfig, type LoadConfigOptions } from '../config/load.js';
 export {

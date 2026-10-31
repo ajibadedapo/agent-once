@@ -4,20 +4,20 @@ import type { ProxyContext } from '../proxy.js';
 import { doubtQuestion } from './messages.js';
 
 export const DEFAULT_ELICITATION_TIMEOUT_MS = 300_000;
-const OUTCOME_FIELD = 'agent_once_outcome';
+export const ELICITATION_OUTCOME_FIELD = 'agent_once_outcome';
 const UNRESOLVED: HumanResolution = { outcome: 'unresolved' };
 
 export const ELICITATION_SCHEMA = {
   type: 'object',
   properties: {
-    [OUTCOME_FIELD]: {
+    [ELICITATION_OUTCOME_FIELD]: {
       type: 'string',
       title: 'Did it happen?',
       enum: ['happened', 'not_happened'],
       enumNames: ['Yes, it happened', 'No, it did not happen'],
     },
   },
-  required: [OUTCOME_FIELD],
+  required: [ELICITATION_OUTCOME_FIELD],
 } as const;
 
 type Attempt = { answer: HumanResolution } | { problem: string } | { cancelled: true };
@@ -32,7 +32,7 @@ function answerOf(reply: unknown): HumanResolution {
   if (typeof reply !== 'object' || reply === null) return UNRESOLVED;
   const { action, content } = reply as { action?: unknown; content?: unknown };
   if (action !== 'accept' || typeof content !== 'object' || content === null) return UNRESOLVED;
-  const value = (content as Record<string, unknown>)[OUTCOME_FIELD];
+  const value = (content as Record<string, unknown>)[ELICITATION_OUTCOME_FIELD];
   return value === 'happened' || value === 'not_happened' ? { outcome: value, by: 'human' } : UNRESOLVED;
 }
 

@@ -2,10 +2,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { STALE_FORM_ERROR } from './api-routes.js';
 import { TARGET_NAMES, TARGETS, type TargetName, type TargetSpec } from './catalog.js';
 import type { TargetsEngine } from './engine.js';
-import { dropConnection, idempotencyKeyOf, readBody, sendHtml } from './http-io.js';
+import { idempotencyKeyOf, readBody, sendHtml } from './http-io.js';
 
 const REFERENCE_FIELD = 'reference';
 const REFERENCE_PATTERN = /^F-\d+$/;
+const GATEWAY_TIMEOUT = '504 Gateway Timeout';
 
 function escapeHtml(text: string): string {
   return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
@@ -121,7 +122,7 @@ export async function handleUi(
       sendHtml(response, 409, renderForm(engine, spec, STALE_FORM_ERROR));
       return;
     case 'dropped':
-      dropConnection(request);
+      sendHtml(response, 504, page(GATEWAY_TIMEOUT, `<h1>${GATEWAY_TIMEOUT}</h1>\n<p>The server did not answer in time.</p>`));
       return;
   }
 }

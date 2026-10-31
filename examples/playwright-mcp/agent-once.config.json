@@ -1,0 +1,101 @@
+{
+  "browser": {
+    "notDispatchedErrors": [
+      "Ref \\S+ not found",
+      "Element uid \\S+ not found",
+      "No element",
+      "not attached",
+      "Element is not visible",
+      "stale",
+      "stale form: nothing was submitted"
+    ],
+    "capture": [
+      {
+        "urlPattern": "^https?://[^/]+/checkout(?:[/?#]|$)",
+        "regex": "Reference (F-\\d+)"
+      },
+      {
+        "urlPattern": "^https?://[^/]+/booking(?:[/?#]|$)",
+        "regex": "Reference (F-\\d+)"
+      },
+      {
+        "urlPattern": "^https?://[^/]+/email(?:[/?#]|$)",
+        "regex": "Reference (F-\\d+)"
+      },
+      {
+        "urlPattern": "^https?://[^/]+/ticket(?:[/?#]|$)",
+        "regex": "Reference (F-\\d+)"
+      }
+    ],
+    "readBack": [
+      {
+        "urlPattern": "^https?://[^/]+/checkout(?:[/?#]|$)",
+        "steps": [
+          {
+            "tool": "browser_navigate",
+            "args": {
+              "url": "{{origin}}/checkout/history"
+            }
+          },
+          {
+            "tool": "browser_snapshot",
+            "args": {}
+          }
+        ],
+        "happened": "\\b{{captured}}\\b",
+        "notHappened": "Checkout history"
+      },
+      {
+        "urlPattern": "^https?://[^/]+/booking(?:[/?#]|$)",
+        "steps": [
+          {
+            "tool": "browser_navigate",
+            "args": {
+              "url": "{{origin}}/booking/history"
+            }
+          },
+          {
+            "tool": "browser_snapshot",
+            "args": {}
+          }
+        ],
+        "happened": "\\b{{captured}}\\b",
+        "notHappened": "Booking history"
+      },
+      {
+        "urlPattern": "^https?://[^/]+/email(?:[/?#]|$)",
+        "steps": [
+          {
+            "tool": "browser_navigate",
+            "args": {
+              "url": "{{origin}}/email/history"
+            }
+          },
+          {
+            "tool": "browser_snapshot",
+            "args": {}
+          }
+        ],
+        "happened": "\\b{{captured}}\\b",
+        "notHappened": "Email history"
+      },
+      {
+        "urlPattern": "^https?://[^/]+/ticket(?:[/?#]|$)",
+        "steps": [
+          {
+            "tool": "browser_navigate",
+            "args": {
+              "url": "{{origin}}/ticket/history"
+            }
+          },
+          {
+            "tool": "browser_snapshot",
+            "args": {}
+          }
+        ],
+        "happened": "\\b{{captured}}\\b",
+        "notHappened": "Ticket history"
+      }
+    ]
+  }
+}

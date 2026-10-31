@@ -48,17 +48,26 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:browser": "vitest run --config vitest.browser.config.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2"
   },
   "peerDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.316",
     "@opentelemetry/api": "^1.9.0"
   },
   "peerDependenciesMeta": {
+    "@anthropic-ai/claude-agent-sdk": {
+      "optional": true
+    },
     "@opentelemetry/api": {
       "optional": true
     }
+  },
+  "devDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.316",
+    "@playwright/mcp": "0.0.83"
   }
 }

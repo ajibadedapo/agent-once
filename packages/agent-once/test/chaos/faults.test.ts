@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { parseFaultPlan } from '../../src/chaos/targets/faults.js';
+import { DEFAULT_BROWSER_CONFIG } from '../../src/config/schema.js';
 import { START_MS, formFields, pageText, postForm, postJson, send, targetsOnManualClock } from './chaos-harness.js';
 
 const ORDER = { item: 'Blue mug', qty: 1 };
@@ -12,6 +13,23 @@ describe('chaos faults', () => {
     await expect(postJson(`${targets.url}/api/checkout`, ORDER, { 'Idempotency-Key': 'ao_lost' })).rejects.toThrow(/socket hang up|ECONNRESET/);
     expect(targets.truth().checkout).toEqual([{ id: 'ORD-1', target: 'checkout', fields: { item: 'Blue mug', qty: '1' }, clientRef: 'ao_lost', atMs: START_MS }]);
     expect(targets.pendingCommits()).toBe(0);
+  });
+
+  test('a dropped UI submit answers like a gateway that lost the response, so a browser shows an error page instead of silently resending the post', async () => {
+    const { targets } = await targetsOnManualClock();
+    targets.setFaults([
+      { target: 'checkout', nth: 1, kind: 'lost_response_after_commit', holdMs: 0 },
+      { target: 'booking', nth: 1, kind: 'timeout_before_commit', holdMs: 0 },
+    ]);
+    const checkout = await postForm(`${targets.url}/checkout/submit`, formFields((await send(`${targets.url}/checkout`)).body));
+    const booking = await postForm(`${targets.url}/booking/submit`, formFields((await send(`${targets.url}/booking`)).body));
+    for (const reply of [checkout, booking]) {
+      expect(reply.status).toBe(504);
+      expect(pageText(reply.body)).toBe('504 Gateway Timeout 504 Gateway Timeout The server did not answer in time.');
+    }
+    expect(DEFAULT_BROWSER_CONFIG.failureMarkers.some((marker) => new RegExp(marker, 'i').test('Page Title: 504 Gateway Timeout'))).toBe(true);
+    expect(targets.truth().checkout.map((effect) => effect.fields.reference)).toEqual(['F-1']);
+    expect(targets.truth().booking).toEqual([]);
   });
 
   test('slow_commit commits only after the clock passes holdMs', async () => {

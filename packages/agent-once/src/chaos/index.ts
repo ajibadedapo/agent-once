@@ -5,3 +5,7 @@ export { FAULT_KINDS, FaultPlanError, parseFaultPlan, type FaultKind, type Fault
 export { startTargets, type RunningTargets, type TargetsOptions } from './targets/server.js';
 export type { Effect } from './targets/store.js';
 export { createTargetsMcpServer, DEFAULT_TARGETS_TIMEOUT_MS, type TargetsMcpOptions } from './targets-mcp/server.js';
+export { checkEffects, flushPendingCommits, type EffectCheck } from './checker.js';
+export { renderMarkdown, summarize, type MatrixSummary, type RateRow } from './report.js';
+export { agentName, CHAOS_START_MS, runMatrix, runScenario, type AgentKind, type MatrixOptions, type RunRecord, type RunScenarioOptions } from './runner.js';
+export { CHAOS_TASKS, SCENARIO_NAMES, SCENARIOS, type ChaosTask, type RunnableScenario, type ScenarioName, type ScenarioSpec } from './scenarios.js';

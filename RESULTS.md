@@ -1,6 +1,6 @@
 # agent-once benchmark results
 
-Generated 2026-10-31T22:25:35.728Z. Every result in this file was measured by the commands below on the machine listed under Guard overhead. Nothing here is taken from another source. The only figures that are not measurements are the token-usage assumptions under Not run, and each is marked as an assumption.
+Generated 2026-10-31T22:36:57.432Z. Every result in this file was measured by the commands below on the machine listed under Guard overhead. Nothing here is taken from another source. The only figures that are not measurements are the token-usage assumptions and the cost estimate under Not run, and each is marked as an assumption or an estimate.
 
 Reproduce with one command from the repository root: `npm ci && npm run build && npx playwright install chromium && npm run bench && npm run bench:browser`
 
@@ -131,7 +131,19 @@ Totals: without the guard 36 duplicates, 12 of which are the known limitation co
 
 Real-model runs planned: claude-agent-sdk, openai, 3 runs per cell, with and without the guard.
 
-Cost estimate: to be filled in before approval. Token-usage assumptions for that estimate:
+Cost estimate (an estimate, not a measurement) for the claude-agent-sdk share of the planned runs: 288 runs (API path 144, browser path 144). Prices: Anthropic's model pricing table as cached on 2026-10-06; re-verify before running.
+
+Assumed: 8 model turns per run, 20000 tokens of system prompt and tool definitions per turn (read from the prompt cache after the first turn when caching works; the first turn is priced as plain input, without any cache-write surcharge), 2000 tokens of conversation per turn and 500 output tokens per turn. These are assumptions, not measurements.
+
+| Model | Input per MTok | Output per MTok | Cache read per MTok | Per run, with caching | Per run, without caching | 288 runs, with caching | 288 runs, without caching |
+|---|---|---|---|---|---|---|---|
+| Claude Sonnet 5.5 | $2.00 | $10.00 | $0.20 | $0.14 | $0.39 | $40 | $113 |
+| Claude Opus 5.5 | $4.00 | $20.00 | $0.20 | $0.25 | $0.78 | $73 | $226 |
+
+- openai: the cost depends on the model and the prices set in AGENT_ONCE_OPENAI_INPUT_USD_PER_MTOK and AGENT_ONCE_OPENAI_OUTPUT_USD_PER_MTOK, so it is not estimated here.
+- Suggested first step: a capped pilot on Claude Sonnet 5.5. Set AGENT_ONCE_CLAUDE_MODEL to its model id and run `npm run bench:real -- --confirm-spend --max-spend-usd 25`; bench:real stops launching runs once the cap is reached and this file reports the runs that finished.
+
+Token-usage inputs for planning, from the scripted runs and stated assumptions:
 
 - runs: API path: 48 cells x 3 runs x 2 agents = 288 runs; browser path: 48 cells x 3 runs x 2 agents = 288 runs
 - API tool calls per run: mean 2.2, max 5 (scripted agents)

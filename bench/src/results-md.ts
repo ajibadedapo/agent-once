@@ -18,6 +18,25 @@ export interface ResultsInput {
   measuredAt?: Partial<Record<'latency' | 'real' | BenchPath, string>>;
   browserSetup?: string;
   realSpend?: RealSpend;
+  costEstimate?: CostEstimate;
+}
+
+export interface ModelPrice {
+  model: string;
+  inputUsdPerMTok: number;
+  outputUsdPerMTok: number;
+  cacheReadUsdPerMTok: number;
+}
+
+export interface CostEstimate {
+  agent: string;
+  priceSource: string;
+  prices: ModelPrice[];
+  turnsPerRun: number;
+  fixedTokensPerTurn: number;
+  conversationTokensPerTurn: number;
+  outputTokensPerTurn: number;
+  notes: string[];
 }
 
 export interface RealSpend {
@@ -310,6 +329,46 @@ function snapshotLine(records: BenchRecord[]): string {
   return `- browser_snapshot size: mean ${average} characters, about ${tokens(average)} tokens at the same assumed ratio; largest ${largest} characters, about ${tokens(largest)} tokens, over ${sizes.length} snapshots of the reference pages (small forms; snapshots of other sites were not measured)`;
 }
 
+const PER_MILLION = 1_000_000;
+
+function runCostUsd(estimate: CostEstimate, price: ModelPrice, cached: boolean): number {
+  const { turnsPerRun: turns, fixedTokensPerTurn: fixed, conversationTokensPerTurn: conversation, outputTokensPerTurn: output } = estimate;
+  const fixedUsd = cached ? fixed * price.inputUsdPerMTok + (turns - 1) * fixed * price.cacheReadUsdPerMTok : turns * fixed * price.inputUsdPerMTok;
+  return (fixedUsd + turns * conversation * price.inputUsdPerMTok + turns * output * price.outputUsdPerMTok) / PER_MILLION;
+}
+
+function dollars(value: number, digits: number): string {
+  return `$${value.toFixed(digits)}`;
+}
+
+function costEstimateLines(input: ResultsInput): string[] {
+  const estimate = input.costEstimate;
+  if (estimate === undefined) return ['Cost estimate: to be filled in before approval. Token-usage assumptions for that estimate:', ''];
+  const plan = input.realRunPlan;
+  const apiRuns = plan.apiCells * plan.runsPerCell;
+  const browserRuns = plan.browserCells * plan.runsPerCell;
+  const runs = apiRuns + browserRuns;
+  const rows = estimate.prices.map((price) => {
+    const cached = runCostUsd(estimate, price, true);
+    const uncached = runCostUsd(estimate, price, false);
+    return `| ${price.model} | ${dollars(price.inputUsdPerMTok, 2)} | ${dollars(price.outputUsdPerMTok, 2)} | ${dollars(price.cacheReadUsdPerMTok, 2)} | ${dollars(cached, 2)} | ${dollars(uncached, 2)} | ${dollars(cached * runs, 0)} | ${dollars(uncached * runs, 0)} |`;
+  });
+  return [
+    `Cost estimate (an estimate, not a measurement) for the ${estimate.agent} share of the planned runs: ${runs} runs (API path ${apiRuns}, browser path ${browserRuns}). Prices: ${estimate.priceSource}.`,
+    '',
+    `Assumed: ${estimate.turnsPerRun} model turns per run, ${estimate.fixedTokensPerTurn} tokens of system prompt and tool definitions per turn (read from the prompt cache after the first turn when caching works; the first turn is priced as plain input, without any cache-write surcharge), ${estimate.conversationTokensPerTurn} tokens of conversation per turn and ${estimate.outputTokensPerTurn} output tokens per turn. These are assumptions, not measurements.`,
+    '',
+    `| Model | Input per MTok | Output per MTok | Cache read per MTok | Per run, with caching | Per run, without caching | ${runs} runs, with caching | ${runs} runs, without caching |`,
+    '|---|---|---|---|---|---|---|---|',
+    ...rows,
+    '',
+    ...estimate.notes.map((note) => `- ${note}`),
+    ...(estimate.notes.length === 0 ? [] : ['']),
+    'Token-usage inputs for planning, from the scripted runs and stated assumptions:',
+    '',
+  ];
+}
+
 function realRunEstimate(input: ResultsInput): string[] {
   const plan = input.realRunPlan;
   const agents = plan.agents.length;
@@ -317,8 +376,7 @@ function realRunEstimate(input: ResultsInput): string[] {
   return [
     `Real-model runs planned: ${plan.agents.join(', ')}, ${plan.runsPerCell} runs per cell, with and without the guard.`,
     '',
-    'Cost estimate: to be filled in before approval. Token-usage assumptions for that estimate:',
-    '',
+    ...costEstimateLines(input),
     `- runs: API path: ${plan.apiCells} cells x ${plan.runsPerCell} runs x ${agents} agents = ${plan.apiCells * plan.runsPerCell * agents} runs; browser path: ${plan.browserCells} cells x ${plan.runsPerCell} runs x ${agents} agents = ${plan.browserCells * plan.runsPerCell * agents} runs`,
     callsLine('API', scripted.filter((record) => record.path === 'api'), 'scripted agents'),
     callsLine('browser', scripted.filter((record) => record.path === 'browser'), 'scripted browser agent'),
@@ -356,7 +414,7 @@ export function renderResults(input: ResultsInput): string {
   return [
     '# agent-once benchmark results',
     '',
-    `Generated ${input.generatedAt}. Every result in this file was measured by the commands below on the machine listed under Guard overhead. Nothing here is taken from another source. The only figures that are not measurements are the token-usage assumptions under Not run, and each is marked as an assumption.`,
+    `Generated ${input.generatedAt}. Every result in this file was measured by the commands below on the machine listed under Guard overhead. Nothing here is taken from another source. The only figures that are not measurements are the token-usage assumptions and the cost estimate under Not run, and each is marked as an assumption or an estimate.`,
     '',
     `Reproduce with one command from the repository root: \`${input.command}\``,
     '',

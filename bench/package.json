@@ -12,7 +12,8 @@
     "bench": "npm run build && node dist/main.js api",
     "bench:browser": "npm run build && node ../packages/agent-once/scripts/check-chromium.mjs && node dist/main.js browser",
     "bench:latency": "npm run build && node dist/main.js latency",
-    "bench:real": "npm run build && node dist/main.js real"
+    "bench:real": "npm run build && node dist/main.js real",
+    "bench:results": "npm run build && node dist/main.js results"
   },
   "devDependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.316",

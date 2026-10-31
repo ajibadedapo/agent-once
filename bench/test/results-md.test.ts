@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import type { LatencyReport } from '../src/latency.js';
 import type { BenchRecord } from '../src/matrix.js';
-import { renderResults, type ResultsInput } from '../src/results-md.js';
+import { renderResults, type CostEstimate, type ResultsInput } from '../src/results-md.js';
 
 const LATENCY: LatencyReport = {
   core: { p50Ms: 0.213, p99Ms: 0.912, meanMs: 0.301, overThreshold: 97 },
@@ -117,6 +117,32 @@ describe('renderResults', () => {
     expect(estimate).toMatch(/browser tool calls per run: mean 8\.0, max 9 \(scripted browser agent\)/);
     expect(estimate).toMatch(/browser tool response size: mean 800 characters per call, about 200 tokens/);
     expect(estimate).toMatch(/browser_snapshot size: mean 900 characters, about 225 tokens at the same assumed ratio; largest 1400 characters, about 350 tokens, over 6 snapshots/);
+  });
+
+  test('a cost estimate from the harness input is priced per model, labelled as an estimate and dated', () => {
+    const costEstimate: CostEstimate = {
+      agent: 'claude-agent-sdk',
+      priceSource: 'Test price table cached 2026-10-06',
+      prices: [
+        { model: 'Model A', inputUsdPerMTok: 2, outputUsdPerMTok: 10, cacheReadUsdPerMTok: 0.2 },
+        { model: 'Model B', inputUsdPerMTok: 4, outputUsdPerMTok: 20, cacheReadUsdPerMTok: 0.2 },
+      ],
+      turnsPerRun: 8,
+      fixedTokensPerTurn: 20_000,
+      conversationTokensPerTurn: 2_000,
+      outputTokensPerTurn: 500,
+      notes: ['openai is not estimated here.'],
+    };
+    const markdown = renderResults(input({ costEstimate }));
+    const estimate = section(markdown, 'Not run');
+    expect(estimate).not.toContain('to be filled in');
+    expect(estimate).toContain('Cost estimate (an estimate, not a measurement) for the claude-agent-sdk share of the planned runs: 216 runs (API path 144, browser path 72).');
+    expect(estimate).toContain('Prices: Test price table cached 2026-10-06.');
+    expect(estimate).toContain('8 model turns per run, 20000 tokens of system prompt and tool definitions per turn');
+    expect(estimate).toMatch(/\| Model A \| \$2\.00 \| \$10\.00 \| \$0\.20 \| \$0\.14 \| \$0\.39 \| \$30 \| \$85 \|/);
+    expect(estimate).toMatch(/\| Model B \| \$4\.00 \| \$20\.00 \| \$0\.20 \| \$0\.25 \| \$0\.78 \| \$54 \| \$169 \|/);
+    expect(estimate).toContain('- openai is not estimated here.');
+    expect(markdown.split('\n')[2]).toContain('cost estimate');
   });
 
   test('real-model runs get their own section and stay out of the scripted tables and estimates', () => {

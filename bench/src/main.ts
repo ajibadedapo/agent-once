@@ -8,7 +8,7 @@ import { BROWSER_RETRY_DELAYS_MS } from './browser-agent.js';
 import { FULL_LATENCY, measureLatency, SMOKE_LATENCY, type LatencyReport } from './latency.js';
 import { API_SCENARIOS, BROWSER_PATH_SCENARIOS, runBenchMatrix, type BenchRecord } from './matrix.js';
 import { CONFIRM_SPEND_FLAG, MAX_SPEND_FLAG, realAgents, realCommand, REAL_RUNS_PER_CELL } from './real-agents/gate.js';
-import { renderResults, type RealSpend } from './results-md.js';
+import { renderResults, type CostEstimate, type RealSpend } from './results-md.js';
 
 interface RealStore {
   records: BenchRecord[];
@@ -25,6 +25,23 @@ const NEEDS_APPROVAL = "no API key in the environment; needs Hammed's approval";
 const REAL_AGENT_LABELS: Readonly<Record<string, string>> = {
   'claude-agent-sdk': 'Claude via the Claude Agent SDK (claude-agent-sdk)',
   openai: 'OpenAI via the Chat Completions API (openai)',
+};
+
+const CLAUDE_COST_ESTIMATE: CostEstimate = {
+  agent: 'claude-agent-sdk',
+  priceSource: "Anthropic's model pricing table as cached on 2026-10-06; re-verify before running",
+  prices: [
+    { model: 'Claude Sonnet 5.5', inputUsdPerMTok: 2, outputUsdPerMTok: 10, cacheReadUsdPerMTok: 0.2 },
+    { model: 'Claude Opus 5.5', inputUsdPerMTok: 4, outputUsdPerMTok: 20, cacheReadUsdPerMTok: 0.2 },
+  ],
+  turnsPerRun: 8,
+  fixedTokensPerTurn: 20_000,
+  conversationTokensPerTurn: 2_000,
+  outputTokensPerTurn: 500,
+  notes: [
+    'openai: the cost depends on the model and the prices set in AGENT_ONCE_OPENAI_INPUT_USD_PER_MTOK and AGENT_ONCE_OPENAI_OUTPUT_USD_PER_MTOK, so it is not estimated here.',
+    'Suggested first step: a capped pilot on Claude Sonnet 5.5. Set AGENT_ONCE_CLAUDE_MODEL to its model id and run `npm run bench:real -- --confirm-spend --max-spend-usd 25`; bench:real stops launching runs once the cap is reached and this file reports the runs that finished.',
+  ],
 };
 
 interface Stored<T> {
@@ -129,6 +146,7 @@ function writeResults(): void {
     },
     browserSetup: browserSetup(),
     ...(real === undefined ? {} : { realSpend: real.data.spend }),
+    costEstimate: CLAUDE_COST_ESTIMATE,
   });
   writeFileSync(RESULTS_MD, markdown);
   log(`wrote ${RESULTS_MD}`);
@@ -208,7 +226,7 @@ async function realRun(argv: string[]): Promise<number> {
   return outcome.exitCode;
 }
 
-const USAGE = 'usage: node dist/main.js latency [--smoke] | api | browser [--runs <n>] [--targets a,b] | real --confirm-spend --max-spend-usd <dollars>';
+const USAGE = 'usage: node dist/main.js latency [--smoke] | api | browser [--runs <n>] [--targets a,b] | real --confirm-spend --max-spend-usd <dollars> | results';
 
 async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
@@ -221,6 +239,9 @@ async function main(argv: string[]): Promise<number> {
       return browserCommand(rest);
     case 'real':
       return realRun(rest);
+    case 'results':
+      writeResults();
+      return 0;
     default:
       log(USAGE);
       return 2;

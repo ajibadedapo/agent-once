@@ -7,6 +7,7 @@ export const CLAUDE_KEY_ENV = 'ANTHROPIC_API_KEY';
 
 const MAX_TURNS = 20;
 const SERVER_NAME = 'targets';
+const TRUSTED_ERROR_COSTS: ReadonlySet<string> = new Set(['error_max_turns', 'error_max_budget_usd', 'error_max_structured_output_retries']);
 
 export type QueryFn = (params: { prompt: string; options?: Options }) => AsyncIterable<SDKMessage>;
 
@@ -42,7 +43,7 @@ export async function runClaudeAgent(deps: ClaudeRunDeps): Promise<void> {
       model: Object.keys(message.modelUsage).join(','),
       inputTokens: usage.reduce((sum, entry) => sum + entry.inputTokens + entry.cacheReadInputTokens + entry.cacheCreationInputTokens, 0),
       outputTokens: usage.reduce((sum, entry) => sum + entry.outputTokens, 0),
-      costUsd: message.total_cost_usd,
+      costUsd: message.is_error && !TRUSTED_ERROR_COSTS.has(message.subtype) ? null : message.total_cost_usd,
     });
     if (message.is_error) throw new Error(`${CLAUDE_AGENT_NAME} ended with ${message.subtype}`);
   }

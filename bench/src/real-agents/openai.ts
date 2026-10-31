@@ -83,7 +83,12 @@ export async function requestCompletion(deps: OpenAiRunDeps, key: string, body: 
     throw error;
   }
   if (!response.ok) throw new Error(`${OPENAI_AGENT_NAME} request failed with ${response.status}: ${text.slice(0, 500)}`);
-  return JSON.parse(text) as Completion;
+  try {
+    return JSON.parse(text) as Completion;
+  } catch (error) {
+    recordUsage(deps.env, { agent: OPENAI_AGENT_NAME, model: body.model, inputTokens: 0, outputTokens: 0, costUsd: null });
+    throw error;
+  }
 }
 
 export function turnCostUsd(usage: CompletionUsage, prices: TokenPrices): number {

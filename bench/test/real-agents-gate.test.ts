@@ -164,4 +164,30 @@ describe('real-model agents', () => {
     await expect(requestCompletion({ env: { [USAGE_FILE_ENV]: usageFile }, fetch }, 'sk-test', { model: 'model-b' })).rejects.toThrow('body aborted');
     expect(JSON.parse(readFileSync(usageFile, 'utf8').trim())).toMatchObject({ costUsd: null });
   });
+
+  test.each([
+    ['error_during_execution', 0, null],
+    ['error_max_turns', 0.2, 0.2],
+    ['error_max_budget_usd', 0.75, 0.75],
+  ])('a Claude %s result reporting %s records cost %s, so a zeroed crash result is charged the whole cap', async (subtype, reported, recorded) => {
+    const dir = mkdtempSync(join(tmpdir(), 'agent-once-usage-'));
+    dirs.push(dir);
+    const usageFile = join(dir, 'usage.jsonl');
+    const result = { type: 'result', subtype, is_error: true, num_turns: 1, total_cost_usd: reported, modelUsage: {} } as unknown as SDKMessage;
+    const query = (): AsyncIterable<SDKMessage> =>
+      (async function* () {
+        yield result;
+      })();
+    await expect(runClaudeAgent({ env: { ...TASK_ENV, ANTHROPIC_API_KEY: 'sk-test', [MAX_RUN_USD_ENV]: '0.75', [USAGE_FILE_ENV]: usageFile }, query })).rejects.toThrow(subtype);
+    expect(JSON.parse(readFileSync(usageFile, 'utf8').trim())).toMatchObject({ costUsd: recorded });
+  });
+
+  test('a billed OpenAI response whose body is not JSON is recorded as unpriced', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agent-once-usage-'));
+    dirs.push(dir);
+    const usageFile = join(dir, 'usage.jsonl');
+    const fetch = vi.fn(async () => ({ ok: true, status: 200, text: async (): Promise<string> => '{"choices": [' }));
+    await expect(requestCompletion({ env: { [USAGE_FILE_ENV]: usageFile }, fetch }, 'sk-test', { model: 'model-b' })).rejects.toThrow();
+    expect(JSON.parse(readFileSync(usageFile, 'utf8').trim())).toMatchObject({ costUsd: null });
+  });
 });

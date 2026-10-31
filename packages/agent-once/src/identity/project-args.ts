@@ -1,4 +1,4 @@
-import type { JsonValue } from '../canonical/jcs.js';
+import { isPlainObject, type JsonValue } from '../canonical/jcs.js';
 
 export type IdentityRule = { include: string[] } | { exclude: string[] } | undefined;
 
@@ -30,7 +30,7 @@ export const BROWSER_VOLATILE_KEYS: readonly string[] = Object.freeze([
 
 function stripVolatile(value: unknown, volatile: ReadonlySet<string>): unknown {
   if (Array.isArray(value)) return value.map((item) => stripVolatile(item, volatile));
-  if (value === null || typeof value !== 'object') return value;
+  if (value === null || typeof value !== 'object' || !isPlainObject(value)) return value;
   return Object.fromEntries(
     Object.entries(value)
       .filter(([key]) => !volatile.has(key))

@@ -77,7 +77,7 @@ describe('canonical rejects values JSON cannot represent', () => {
 
   test('a lone surrogate in a string or key', () => {
     expect(thrownBy(() => canonicalize({ text: 'a\ud800' })).path).toBe('$.text');
-    expect(thrownBy(() => canonicalize({ ['\udc00']: 1 })).path).toBe('$');
+    expect(thrownBy(() => canonicalize({ outer: { ['\udc00']: 1 } })).path).toBe('$.outer["\\udc00"]');
   });
 
   test('a cycle', () => {

@@ -22,7 +22,7 @@ function serializeString(value: string, path: string): string {
   return JSON.stringify(value);
 }
 
-function isPlainObject(value: object): boolean {
+export function isPlainObject(value: object): boolean {
   const prototype: unknown = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }
@@ -61,7 +61,8 @@ function serializeObject(value: object, path: string, ancestors: Set<object>): s
   for (const key of Object.keys(record).sort()) {
     const member = record[key];
     if (member === undefined) continue;
-    members.push(`${serializeString(key, path)}:${serialize(member, memberPath(path, key), ancestors)}`);
+    const keyPath = memberPath(path, key);
+    members.push(`${serializeString(key, keyPath)}:${serialize(member, keyPath, ancestors)}`);
   }
   return `{${members.join(',')}}`;
 }

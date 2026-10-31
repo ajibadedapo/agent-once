@@ -39,12 +39,15 @@ export class ManualClock implements Clock {
   advance(ms: number): void {
     if (!(ms >= 0)) throw new RangeError(`ManualClock cannot advance by ${ms} ms`);
     const targetMs = this.currentMs + ms;
-    for (let timer = this.earliestDueBy(targetMs); timer !== undefined; timer = this.earliestDueBy(targetMs)) {
-      this.pending.delete(timer);
-      this.currentMs = timer.dueMs;
-      timer.fn();
+    try {
+      for (let timer = this.earliestDueBy(targetMs); timer !== undefined; timer = this.earliestDueBy(targetMs)) {
+        this.pending.delete(timer);
+        this.currentMs = timer.dueMs;
+        timer.fn();
+      }
+    } finally {
+      this.currentMs = targetMs;
     }
-    this.currentMs = targetMs;
   }
 
   private earliestDueBy(limitMs: number): PendingTimer | undefined {

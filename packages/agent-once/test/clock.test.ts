@@ -73,6 +73,22 @@ describe('ManualClock', () => {
     expect(fired).toBe(true);
   });
 
+  test('a throwing timer still leaves the clock at the advance target and later timers pending', () => {
+    const clock = new ManualClock(START);
+    let laterFired = false;
+    clock.setTimer(100, () => {
+      throw new Error('boom');
+    });
+    clock.setTimer(150, () => {
+      laterFired = true;
+    });
+    expect(() => clock.advance(200)).toThrow('boom');
+    expect(clock.nowMs()).toBe(START + 200);
+    expect(laterFired).toBe(false);
+    clock.advance(0);
+    expect(laterFired).toBe(true);
+  });
+
   test('advance rejects a negative duration', () => {
     expect(() => new ManualClock(START).advance(-1)).toThrow(RangeError);
   });

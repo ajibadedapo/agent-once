@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+import { CanonicalizationError } from '../src/canonical/jcs.js';
 import { actionId, intentHash } from '../src/identity/identity.js';
 import { BROWSER_VOLATILE_KEYS, DEFAULT_VOLATILE_KEYS, projectArgs } from '../src/identity/project-args.js';
 import { loadVectors, type IdentityVector } from './vectors.js';
@@ -55,6 +56,13 @@ describe('projectArgs removes volatile keys at any depth', () => {
     expect(Object.getPrototypeOf(projected)).toBe(Object.prototype);
     expect(Object.keys(projected)).toEqual(['__proto__', 'nested']);
     expect(Object.keys(projected.nested as object)).toEqual(['__proto__']);
+  });
+
+  test('non-plain objects pass through so canonicalize rejects them instead of hashing them as {}', () => {
+    for (const value of [new Date(1_761_912_345_678), new Map([['k', 1]]), new Set([1]), new URL('https://example.com/a')]) {
+      const projected = projectArgs({ when: value, nonce: 'n' }, undefined, DEFAULT_VOLATILE_KEYS);
+      expect(() => intentHash({ sessionKey: 's', tool: 'book', projectedArgs: projected })).toThrow(CanonicalizationError);
+    }
   });
 
   test('does not mutate the input', () => {

@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import { homedir } from 'node:os';
 import { LedgerUnavailableError } from '../ledger/errors.js';
+import { CHAOS_USAGE, runChaos } from './commands/chaos.js';
 import { LEDGER_USAGE, runLedger } from './commands/ledger.js';
 import { MCP_USAGE, runMcp } from './commands/mcp.js';
 import { RESOLVE_USAGE, runResolve } from './commands/resolve.js';
 import { CliExit, EXIT_LEDGER, EXIT_OK, EXIT_USAGE, type CliIo } from './io.js';
 
-const USAGE = ['Usage:', `  ${MCP_USAGE.replace('Usage: ', '')}`, `  ${RESOLVE_USAGE.replace('Usage: ', '')}`, `  ${LEDGER_USAGE.replace('Usage: ', '')}`].join('\n');
+const USAGE = ['Usage:', `  ${MCP_USAGE.replace('Usage: ', '')}`, `  ${RESOLVE_USAGE.replace('Usage: ', '')}`, `  ${LEDGER_USAGE.replace('Usage: ', '')}`, ...CHAOS_USAGE.replace('Usage: ', '').split(' | ').map((line) => `  ${line}`)].join('\n');
 
 const EXIT_GRACE_MS = 2000;
 
@@ -19,6 +20,8 @@ async function run(argv: string[], io: CliIo): Promise<number> {
       return runResolve(rest, io);
     case 'ledger':
       return runLedger(rest, io);
+    case 'chaos':
+      return runChaos(rest, io);
     case 'help':
     case '--help':
     case '-h':

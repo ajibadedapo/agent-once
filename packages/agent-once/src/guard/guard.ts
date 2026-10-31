@@ -3,7 +3,7 @@ import type { EvidenceEvent, EvidenceKind, EvidenceSink } from '../evidence/type
 import { actionId as deriveActionId, intentHash } from '../identity/identity.js';
 import { DEFAULT_VOLATILE_KEYS, projectArgs } from '../identity/project-args.js';
 import { LedgerConflictError, LedgerUnavailableError } from '../ledger/errors.js';
-import type { GuardPolicy, LedgerEvent, LedgerState, LedgerStore, LedgerTx, NewLedgerEvent } from '../ledger/types.js';
+import { isUnresolvedEvent, type GuardPolicy, type LedgerEvent, type LedgerState, type LedgerStore, type LedgerTx, type NewLedgerEvent } from '../ledger/types.js';
 import type { Clock } from '../time/clock.js';
 import { decide } from './decide.js';
 import { DEFAULT_MAX_RESULT_BYTES, storedResultDetail } from './result-cap.js';
@@ -122,12 +122,6 @@ function capturedDetail(call: GuardedCall): Record<string, JsonValue> {
   return call.captured === undefined ? {} : { captured: call.captured };
 }
 
-function isUnresolved(event: LedgerEvent, nowMs: number): boolean {
-  if (event.expiresAtMs <= nowMs) return false;
-  if (event.state === 'intended' || event.state === 'sent') return true;
-  return event.state === 'failed' && event.detail.failure_kind !== 'not_dispatched';
-}
-
 function replayed(event: LedgerEvent, reason: string): GuardResult {
   return {
     status: 'replayed',
@@ -211,7 +205,7 @@ export class Guard {
     const result = this.store.transact((tx): ResolveResult => {
       const latest = tx.latest(found.intentHash);
       const nowMs = this.clock.nowMs();
-      if (latest === undefined || latest.actionId !== actionId || !isUnresolved(latest, nowMs)) return { ok: false, reason: 'not_in_doubt' };
+      if (latest === undefined || latest.actionId !== actionId || !isUnresolvedEvent(latest, nowMs)) return { ok: false, reason: 'not_in_doubt' };
       if (by === 'agent' && latest.toolClass !== 'standard') return { ok: false, reason: 'agent_cannot_resolve_class', event: latest };
       if (by === 'agent' && outcome === 'not_happened' && nowMs - latest.atMs < this.settleWindowMs) return { ok: false, reason: 'too_soon' };
       return { ok: true, event: tx.append(this.followUp(latest, 'reconciled', { outcome, resolved_by: by, result: null, result_truncated: false })) };

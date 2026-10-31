@@ -236,7 +236,7 @@ def test_find_action_returns_the_newest_event_for_an_action_id(open_store: OpenS
     assert ledger.find_action("ao_missing") is None
 
 
-def test_list_in_doubt_returns_intended_and_sent_actions_that_are_not_expired(
+def test_list_in_doubt_returns_the_unexpired_latest_event_of_each_intent_that_resolve_accepts(
     open_store: OpenStore,
 ) -> None:
     ledger = open_store()
@@ -262,11 +262,40 @@ def test_list_in_doubt_returns_intended_and_sent_actions_that_are_not_expired(
             )
         )
         tx.append(new_event(intent_hash="4" * 64, action_id="ao_expired", expires_at_ms=now))
+        for action_id, intent, kind in [
+            ("ao_failed", "5", "error_result"),
+            ("ao_not_dispatched", "6", "not_dispatched"),
+            ("ao_superseded", "7", "transport_error"),
+        ]:
+            tx.append(new_event(intent_hash=intent * 64, action_id=action_id))
+            tx.append(
+                new_event(
+                    intent_hash=intent * 64,
+                    action_id=action_id,
+                    state="failed",
+                    at_ms=START_MS + 4,
+                    detail={"failure_kind": kind, "error": "HTTP 504", "result": None},
+                )
+            )
+        tx.append(
+            new_event(intent_hash="7" * 64, action_id="ao_retry", occurrence=1, at_ms=START_MS + 5)
+        )
+        tx.append(
+            new_event(
+                intent_hash="7" * 64,
+                action_id="ao_retry",
+                occurrence=1,
+                state="confirmed",
+                at_ms=START_MS + 6,
+                detail={"result": None, "result_truncated": False, "delivery": "delivered"},
+            )
+        )
 
     ledger.transact(fill)
     assert [(event.action_id, event.state) for event in ledger.list_in_doubt(now)] == [
         ("ao_intended", "intended"),
         ("ao_sent", "sent"),
+        ("ao_failed", "failed"),
     ]
 
 

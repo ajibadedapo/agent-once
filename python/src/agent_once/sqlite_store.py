@@ -21,6 +21,7 @@ from .ledger import (
     LedgerUnavailableError,
     LedgerUsageError,
     NewLedgerEvent,
+    is_unresolved_event,
     reject_awaitable,
     stored_event,
 )
@@ -58,9 +59,12 @@ DEFAULT_HOME_DIR = ".agent-once"
 LATEST_SQL = "SELECT * FROM events WHERE intent_hash = ? ORDER BY occurrence DESC, seq DESC LIMIT 1"
 FIND_ACTION_SQL = "SELECT * FROM events WHERE action_id = ? ORDER BY seq DESC LIMIT 1"
 IN_DOUBT_SQL = """SELECT * FROM events AS e
-WHERE e.state IN ('intended', 'sent') AND e.expires_at_ms > ?
+WHERE e.state IN ('intended', 'sent', 'failed') AND e.expires_at_ms > ?
   AND NOT EXISTS (
-    SELECT 1 FROM events AS later WHERE later.action_id = e.action_id AND later.seq > e.seq
+    SELECT 1 FROM events AS later
+    WHERE later.intent_hash = e.intent_hash
+      AND (later.occurrence > e.occurrence
+        OR (later.occurrence = e.occurrence AND later.seq > e.seq))
   )
 ORDER BY e.seq"""
 APPEND_SQL = """INSERT INTO events (action_id, intent_hash, occurrence, state, at_ms, expires_at_ms,
@@ -287,7 +291,8 @@ class SqliteLedgerStore:
             rows = connection.execute(IN_DOUBT_SQL, (now_ms,)).fetchall()
         except sqlite3.Error as error:
             raise _unavailable(error, "cannot read the ledger") from error
-        return [_to_event(row) for row in rows]
+        events = [_to_event(row) for row in rows]
+        return [event for event in events if is_unresolved_event(event, now_ms)]
 
     def settings(self) -> SqliteLedgerSettings:
         with self._lock:

@@ -44,6 +44,31 @@ function relativeTargets(text) {
   return targets.filter((target) => !SCHEME.test(target) && !target.startsWith('#'));
 }
 
+function sameFileAnchors(text) {
+  const prose = withoutFences(text).replace(/`[^`\n]*`/g, '');
+  return [...prose.matchAll(INLINE_LINK)].map((match) => match[1]).filter((target) => target.startsWith('#'));
+}
+
+function slug(heading) {
+  return heading
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s_-]/gu, '')
+    .replace(/\s/g, '-');
+}
+
+function headingAnchors(text) {
+  const seen = new Map();
+  const anchors = new Set();
+  for (const match of withoutFences(text).matchAll(/^#{1,6}\s+(.+?)\s*#*\s*$/gm)) {
+    const base = slug(match[1]);
+    const count = seen.get(base) ?? 0;
+    seen.set(base, count + 1);
+    anchors.add(count === 0 ? base : `${base}-${count}`);
+  }
+  return anchors;
+}
+
 function codeBlocks(text, langs) {
   return [...text.matchAll(FENCE)].filter((match) => langs.has(match[1].trim().split(/\s+/)[0])).map((match) => match[2]);
 }
@@ -68,18 +93,31 @@ test('README line 1 is exactly the agreed sentence', () => {
   assert.equal(read('README.md').split('\n')[0], FIRST_LINE);
 });
 
-test('every relative link in README and docs resolves to a file', () => {
+test('every relative link in README and docs resolves to a file and an existing heading anchor', () => {
   const broken = [];
   const files = docFiles();
   assert.ok(files.length > TOP_LEVEL_DOCS.length, 'expected guides under docs/');
   for (const file of files) {
-    for (const target of relativeTargets(read(file))) {
-      const path = decodeURIComponent(target.split('#')[0].split('?')[0]);
-      if (path === '') continue;
-      if (!existsSync(resolve(ROOT, dirname(file), path))) broken.push(`${file}: ${target}`);
+    const text = read(file);
+    const targets = [...relativeTargets(text), ...sameFileAnchors(text)];
+    for (const target of targets) {
+      const [pathPart, anchor] = target.split('#');
+      const path = decodeURIComponent(pathPart.split('?')[0]);
+      const resolved = path === '' ? join(ROOT, file) : resolve(ROOT, dirname(file), path);
+      if (!existsSync(resolved)) {
+        broken.push(`${file}: ${target}`);
+        continue;
+      }
+      if (anchor === undefined || anchor === '') continue;
+      if (!resolved.endsWith('.md') || !headingAnchors(readFileSync(resolved, 'utf8')).has(anchor)) broken.push(`${file}: ${target} (no such heading)`);
     }
   }
   assert.deepEqual(broken, []);
+});
+
+test('the heading anchor check follows GitHub slugs', () => {
+  const anchors = headingAnchors('# Did the click work?\n\n## `ledger`\n\n## Read-back\n\n## Read-back\n\n```\n## not a heading\n```\n');
+  assert.deepEqual([...anchors], ['did-the-click-work', 'ledger', 'read-back', 'read-back-1']);
 });
 
 test('every code block tagged ts in docs typechecks', () => {
@@ -111,15 +149,24 @@ test('README overhead figure equals the one in RESULTS.md', () => {
   for (const figure of quoted) assert.ok(measured.includes(figure), `README quotes ${figure}, which RESULTS.md does not contain`);
 });
 
-test('README results rows are copied verbatim from RESULTS.md', () => {
+test('README results rows and their totals are copied verbatim from the same RESULTS.md section', () => {
   const results = read('RESULTS.md');
+  const sections = ['API path', 'Browser path'].map((heading) => section(results, heading) ?? '');
   const excerpt = section(read('README.md'), 'Results');
   assert.ok(excerpt !== undefined, 'README has no Results section');
-  const rows = excerpt.split('\n').filter((line) => line.startsWith('| ') && !line.startsWith('| Agent |'));
-  assert.ok(rows.length > 0, 'README Results section has no rows from RESULTS.md');
-  for (const row of rows) assert.ok(results.includes(`${row}\n`), `README row is not in RESULTS.md: ${row}`);
-  const totals = excerpt.split('\n').filter((line) => line.startsWith('Totals: '));
-  for (const line of totals) assert.ok(results.includes(line), `README totals line is not in RESULTS.md: ${line}`);
+  let totals;
+  let rows = 0;
+  for (const line of excerpt.split('\n')) {
+    if (line.startsWith('Totals: ')) {
+      totals = line;
+      assert.ok(results.includes(`${line}\n`), `README totals line is not in RESULTS.md: ${line}`);
+    }
+    if (!line.startsWith('| ') || line.startsWith('| Agent |')) continue;
+    rows += 1;
+    assert.ok(totals !== undefined, `README row has no totals line before it: ${line}`);
+    assert.ok(sections.some((part) => part.includes(`${totals}\n`) && part.includes(`${line}\n`)), `README row is not in the RESULTS.md section of the totals above it: ${line}`);
+  }
+  assert.ok(rows > 0, 'README Results section has no rows from RESULTS.md');
 });
 
 test('the packed README links to the repository instead of relative paths', () => {

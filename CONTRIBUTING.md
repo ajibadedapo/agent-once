@@ -45,6 +45,21 @@ Notes:
 - A guard bug that could duplicate or lose an action gets a chaos scenario or property test as well as a unit test.
 - Commit messages read `<area>: <what changed>`, with areas spec, core, py, proxy, browser, chaos, integrations, ci, bench and docs.
 
+## Releasing
+
+Both packages share one version: bump `packages/agent-once/package.json` and `python/pyproject.toml` together and add a CHANGELOG entry.
+
+- **Normal releases** go through the release workflow: push a `v<version>` tag on `main`. It checks that the tag matches both versions, runs the tests, publishes `agent-once` to npm with `--provenance` and `once-guard` to PyPI with attestations.
+- **A manual release** (the first one, before the workflow's npm token and PyPI trusted publisher exist) is published from a clean checkout of the tagged commit. Provenance needs a CI identity, so it is not requested locally; `publishConfig` sets only `access: public`.
+
+```bash
+npm ci
+npm publish ./packages/agent-once --access public --otp <code>
+cd python && uv build && uv publish dist/*
+```
+
+`npm publish` runs `prepack`, which builds the package and copies the README (with links made absolute) and LICENSE into it. Check the contents first with `npm pack --dry-run -w agent-once` and `npx --yes publint` in `packages/agent-once`.
+
 ## Reporting
 
 - Bugs and feature requests: GitHub issues. Include the agent-once version, the MCP server and client, and the config.

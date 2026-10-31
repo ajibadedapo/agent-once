@@ -16,7 +16,7 @@ from .ledger import (
     LedgerUnavailableError,
     LedgerUsageError,
     NewLedgerEvent,
-    is_in_doubt_state,
+    is_unresolved_event,
     reject_awaitable,
     stored_event,
 )
@@ -92,17 +92,14 @@ class MemoryLedgerStore:
 
     def _list_in_doubt_locked(self, now_ms: int) -> list[LedgerEvent]:
         self._assert_open()
-        newest: dict[str, _Stored] = {}
+        latest_by_intent: dict[str, _Stored] = {}
         for stored in self._events:
-            newest[stored.event.action_id] = stored
-        candidates = [
-            stored
-            for stored in newest.values()
-            if is_in_doubt_state(stored.event.state) and stored.event.expires_at_ms > now_ms
-        ]
-        return [
-            stored.materialize() for stored in sorted(candidates, key=lambda stored: stored.seq)
-        ]
+            latest = latest_by_intent.get(stored.event.intent_hash)
+            if latest is None or stored.event.occurrence >= latest.event.occurrence:
+                latest_by_intent[stored.event.intent_hash] = stored
+        ordered = sorted(latest_by_intent.values(), key=lambda stored: stored.seq)
+        events = [stored.materialize() for stored in ordered]
+        return [event for event in events if is_unresolved_event(event, now_ms)]
 
     def close(self) -> None:
         self._closed = True

@@ -171,7 +171,7 @@ export function ledgerContract(name: string, makeHarness: () => StoreHarness): v
       expect(ledger.findAction('ao_missing')).toBeUndefined();
     });
 
-    test('listInDoubt returns intended and sent actions that are not expired', () => {
+    test('listInDoubt returns the unexpired latest event of each intent that resolve would accept', () => {
       const ledger = openStore();
       const now = START_MS + 1_000;
       ledger.transact((tx) => {
@@ -190,11 +190,31 @@ export function ledgerContract(name: string, makeHarness: () => StoreHarness): v
           }),
         );
         tx.append(newEvent({ intentHash: '4'.repeat(64), actionId: 'ao_expired', expiresAtMs: now }));
+        const failed = (actionId: string, intentHash: string, failureKind: string, occurrence = 0) =>
+          newEvent({ intentHash, actionId, occurrence, state: 'failed', atMs: START_MS + 4, detail: { failure_kind: failureKind, error: 'HTTP 504', result: null } });
+        tx.append(newEvent({ intentHash: '5'.repeat(64), actionId: 'ao_failed' }));
+        tx.append(failed('ao_failed', '5'.repeat(64), 'error_result'));
+        tx.append(newEvent({ intentHash: '6'.repeat(64), actionId: 'ao_not_dispatched' }));
+        tx.append(failed('ao_not_dispatched', '6'.repeat(64), 'not_dispatched'));
+        tx.append(newEvent({ intentHash: '7'.repeat(64), actionId: 'ao_superseded' }));
+        tx.append(failed('ao_superseded', '7'.repeat(64), 'transport_error'));
+        tx.append(newEvent({ intentHash: '7'.repeat(64), actionId: 'ao_retry', occurrence: 1, atMs: START_MS + 5 }));
+        tx.append(
+          newEvent({
+            intentHash: '7'.repeat(64),
+            actionId: 'ao_retry',
+            occurrence: 1,
+            state: 'confirmed',
+            atMs: START_MS + 6,
+            detail: { result: null, result_truncated: false, delivery: 'delivered' },
+          }),
+        );
       });
       const inDoubt = ledger.listInDoubt(now);
       expect(inDoubt.map((event) => [event.actionId, event.state])).toEqual([
         ['ao_intended', 'intended'],
         ['ao_sent', 'sent'],
+        ['ao_failed', 'failed'],
       ]);
     });
 

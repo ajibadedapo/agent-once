@@ -19,7 +19,7 @@ npx agent-once ledger list --in-doubt
 npx agent-once ledger list --json
 ```
 
-`ledger list` prints the latest state of every unexpired action, newest last, with its action id, state, tool, class, time and session. `--in-doubt` shows only actions whose dispatch has no recorded outcome (`intended` or `sent`). An action whose last state is `failed` can also be held in doubt (within the retry window, or always for `block-on-doubt`); it appears in the plain `ledger list` with state `failed`, and `resolve` accepts it. `--json` prints an array of objects with `action_id`, `state`, `tool`, `tool_class`, `policy`, `occurrence`, `session_key`, `at_ms` and `args` (`null` when `storeArgs` is off).
+`ledger list` prints the latest state of every unexpired action, newest last, with its action id, state, tool, class, time and session. `--in-doubt` shows exactly the actions `resolve` would accept: for each intent, its latest event when that event is unexpired and `intended`, `sent`, or `failed` for any reason other than not dispatched (for example a 504 page after a money click). `--json` prints an array of objects with `action_id`, `state`, `tool`, `tool_class`, `policy`, `occurrence`, `session_key`, `at_ms` and `args` (`null` when `storeArgs` is off).
 
 ```bash
 npx agent-once resolve ao_0123456789abcdef01234567 --happened

@@ -54,7 +54,7 @@ except ActionInDoubt as doubt:
 - Without `session_key`, the session is `AGENT_ONCE_SESSION` when set (explicit), else `python:<cwd>` (default).
 - On methods, `self` or `cls` is left out of identity: two instances calling the same method with equal arguments share an intent (a replay, never a duplicate). Pass `session_key` or `intent_key` when instances stand for different intents.
 - A sync function that returns an awaitable is refused (recorded as not dispatched); decorate the `async def` instead.
-- Return values must be JSON values. Integers that a double cannot represent exactly (many above 2^53) raise `CanonicalizationError`, because both cores hash numbers as IEEE 754 doubles; pass large ids as strings.
+- Arguments and return values should be JSON values. Arguments that cannot be canonicalized, including integers a double cannot represent exactly (many above 2^53), raise `CanonicalizationError` before anything runs, because both cores hash numbers as IEEE 754 doubles; pass large ids as strings. A return value that cannot be canonicalized is still returned, but the ledger stores no result for it (`result_error`), so a later replay returns `None`.
 
 ## Running a call
 

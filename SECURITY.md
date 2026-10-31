@@ -12,7 +12,7 @@ Include the affected version, how to reproduce it, and what an attacker gains. A
 |---|---|
 | 0.1.x | Yes |
 
-Fixes go into the latest release. Releases are published from tagged commits on `main` by the release workflow, with npm provenance and PyPI attestations.
+Fixes go into the latest release. Releases published by the release workflow (from a `v*` tag on `main`) carry npm provenance and PyPI attestations. A release published by hand from a workstation, such as the first one, does not.
 
 ## No telemetry
 

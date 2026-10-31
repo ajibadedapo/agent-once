@@ -369,6 +369,11 @@ function costEstimateLines(input: ResultsInput): string[] {
   ];
 }
 
+function outputTokensLine(estimate: CostEstimate | undefined): string {
+  if (estimate === undefined) return '- output tokens per model turn: assumed about 100 (one tool call with short arguments); not measured';
+  return `- output tokens per model turn: assumed ${estimate.outputTokensPerTurn} (the tool call, its arguments and any text around it), as in the cost estimate above; not measured`;
+}
+
 function realRunEstimate(input: ResultsInput): string[] {
   const plan = input.realRunPlan;
   const agents = plan.agents.length;
@@ -382,8 +387,8 @@ function realRunEstimate(input: ResultsInput): string[] {
     callsLine('browser', scripted.filter((record) => record.path === 'browser'), 'scripted browser agent'),
     responseLine(scripted.filter((record) => record.path === 'browser')),
     snapshotLine(scripted.filter((record) => record.path === 'browser')),
-    '- input tokens per model call: the system prompt and tool definitions (not measured here) plus the whole conversation so far, so call k of a run re-sends the k - 1 earlier tool results; per run that is about C x B + R x C x (C - 1) / 2 tokens for C calls, B fixed tokens and R tokens per tool result',
-    '- output tokens per model call: assumed about 100 (one tool call with short arguments); not measured',
+    '- input tokens per model turn: the system prompt and tool definitions (not measured here) plus the whole conversation so far, so turn k of a run re-sends the k - 1 earlier tool results; per run that is about C x B + R x C x (C - 1) / 2 tokens for C turns of one tool call each, B fixed tokens and R tokens per tool result',
+    outputTokensLine(input.costEstimate),
     '- a real model may call more or fewer tools than the scripted agents; the scripted counts above are a starting point, not a measurement of any model',
     '',
   ];

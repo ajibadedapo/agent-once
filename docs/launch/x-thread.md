@@ -43,5 +43,5 @@ GitHub Action, vitest and pytest included. TS + Python. Apache 2.0. No telemetry
 
 Background for replies:
 
-- Re-verify before posting: UndoBench, naive retry duplicated mutations in 53.33% of fault-injected runs. Source: the UndoBench paper and results.
-- Re-verify before posting: CUA-Recovery (arXiv 2610.27645), agents recognised inherited errors at most 44.0% of the time. Source: arXiv 2610.27645.
+- Re-verify before posting: UndoBench reports that naive retry produced duplicate external effects in 53.33% of trials (512 of 960) in its lost-acknowledgment study; the paper reports other naive-retry rates for other settings, so quote this one with its setting. Source: "UndoBench: Separating Task Competence from Recovery Capability in Tool-Using AI Agents", Dolly Sah, Tanmay Sah, Harshul Jain and Tanya Sah, arXiv 2610.05622, https://arxiv.org/abs/2610.05622
+- Re-verify before posting: CUA-Recovery found that agents recognised inherited errors (its Error Awareness Rate) at most 44.0% of the time across six agents. Source: "CUA-Recovery: Benchmarking Error Recovery in Long-Horizon Computer-Use Agents", Xu Hu et al., arXiv 2610.27645, https://arxiv.org/abs/2610.27645

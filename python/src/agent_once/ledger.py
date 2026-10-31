@@ -89,8 +89,12 @@ class LedgerUsageError(Exception):
     pass
 
 
-def is_in_doubt_state(state: LedgerState) -> bool:
-    return state in ("intended", "sent")
+def is_unresolved_event(event: LedgerEvent, now_ms: int) -> bool:
+    if event.expires_at_ms <= now_ms:
+        return False
+    if event.state in ("intended", "sent"):
+        return True
+    return event.state == "failed" and event.detail.get("failure_kind") != "not_dispatched"
 
 
 def reject_awaitable(result: object) -> None:

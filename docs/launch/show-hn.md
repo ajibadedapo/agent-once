@@ -41,6 +41,6 @@ I'd love to hear where the identity rules are wrong for your tools, and about an
 
 ## Background figures for replies
 
-- Re-verify before posting: UndoBench reports that naive retry caused duplicate mutations in 53.33% of fault-injected runs. Source: the UndoBench paper and results.
-- Re-verify before posting: CUA-Recovery found agents recognised inherited errors at most 44.0% of the time. Source: arXiv 2610.27645.
-- Re-verify before posting: @playwright/mcp has about 25.6M npm downloads per month. Source: npm download stats for @playwright/mcp.
+- Re-verify before posting: UndoBench reports that naive retry produced duplicate external effects in 53.33% of trials (512 of 960) in its lost-acknowledgment study; the paper reports other naive-retry rates for other settings, so quote this one with its setting. Source: "UndoBench: Separating Task Competence from Recovery Capability in Tool-Using AI Agents", Dolly Sah, Tanmay Sah, Harshul Jain and Tanya Sah, arXiv 2610.05622, https://arxiv.org/abs/2610.05622
+- Re-verify before posting: CUA-Recovery found that agents recognised inherited errors (its Error Awareness Rate) at most 44.0% of the time across six agents. Source: "CUA-Recovery: Benchmarking Error Recovery in Long-Horizon Computer-Use Agents", Xu Hu et al., arXiv 2610.27645, https://arxiv.org/abs/2610.27645
+- Re-verify before posting: @playwright/mcp has about 25.6M npm downloads per month. Source: npm downloads API, https://api.npmjs.org/downloads/point/last-month/@playwright/mcp

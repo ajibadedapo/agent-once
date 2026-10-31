@@ -48,7 +48,7 @@ A client that knows the intent exactly can send `_meta["io.github.ajibadedapo/ag
 
 ## What the agent sees
 
-Executed and replayed results carry `_meta["io.github.ajibadedapo/agent-once"] = { "status": ..., "action_id": ... }` (and `class` on in-doubt and blocked results). Statuses: `executed`, `replayed`, `in_doubt`, `blocked`, `retry_by_agent`.
+Results the guard decides (executed, replayed, in doubt, blocked, retry by agent) carry `_meta["io.github.ajibadedapo/agent-once"] = { "status": ..., "action_id": ... }` (and `class` on in-doubt and blocked results). Results of tools that pass carry no agent-once metadata. Statuses: `executed`, `replayed`, `in_doubt`, `blocked`, `retry_by_agent`.
 
 - **Replayed:** the recorded result, preceded by "agent-once: this action already happened (action ao_...); returning the recorded result instead of repeating it."
 - **In doubt (`guard` policy):** an error result: "agent-once stopped this call: an earlier identical ... call (action ao_...) may already have taken effect and its outcome is unknown. Do not retry it." followed by how to resolve it.
@@ -79,7 +79,7 @@ For `block-on-doubt` actions the proxy asks a person, in order:
 Without an answer the call is blocked, and the user can resolve it later from a terminal:
 
 ```bash
-npx agent-once ledger list
+npx agent-once ledger list --in-doubt
 npx agent-once resolve ao_0123456789abcdef01234567 --not-happened
 ```
 

@@ -41,6 +41,7 @@ from .ledger import (
     LedgerUnavailableError,
     NewLedgerEvent,
     ToolClass,
+    is_unresolved_event,
 )
 from .result_cap import DEFAULT_MAX_RESULT_BYTES, stored_result_detail
 
@@ -121,14 +122,6 @@ def _unavailable(error: LedgerUnavailableError) -> GuardResult:
 
 def _captured_detail(call: GuardedCall) -> dict[str, JsonValue]:
     return {} if call.captured is None else {"captured": call.captured}
-
-
-def _is_unresolved(event: LedgerEvent, now_ms: int) -> bool:
-    if event.expires_at_ms <= now_ms:
-        return False
-    if event.state in ("intended", "sent"):
-        return True
-    return event.state == "failed" and event.detail.get("failure_kind") != "not_dispatched"
 
 
 def _replayed(event: LedgerEvent, reason: str) -> GuardResult:
@@ -689,7 +682,8 @@ class Guard:
         def settle(tx: LedgerTx) -> ResolveResult:
             latest = tx.latest(found.intent_hash)
             now_ms = self._clock.now_ms()
-            if latest is None or latest.action_id != target or not _is_unresolved(latest, now_ms):
+            unresolved = latest is not None and is_unresolved_event(latest, now_ms)
+            if latest is None or latest.action_id != target or not unresolved:
                 return ResolveResult(False, reason="not_in_doubt")
             if by == "agent" and latest.tool_class != "standard":
                 return ResolveResult(False, reason="agent_cannot_resolve_class")

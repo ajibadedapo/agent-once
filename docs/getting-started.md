@@ -61,7 +61,7 @@ There is one order. Without agent-once (`claude mcp add playwright -- npx @playw
 ## 4. Settle the doubt
 
 ```bash
-npx agent-once ledger list
+npx agent-once ledger list --in-doubt
 npx agent-once resolve <action_id> --happened
 ```
 

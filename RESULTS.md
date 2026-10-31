@@ -1,6 +1,6 @@
 # agent-once benchmark results
 
-Generated 2026-10-31T22:36:57.432Z. Every result in this file was measured by the commands below on the machine listed under Guard overhead. Nothing here is taken from another source. The only figures that are not measurements are the token-usage assumptions and the cost estimate under Not run, and each is marked as an assumption or an estimate.
+Generated 2026-10-31T23:00:54.451Z. Every result in this file was measured by the commands below on the machine listed under Guard overhead. Nothing here is taken from another source. The only figures that are not measurements are the token-usage assumptions and the cost estimate under Not run, and each is marked as an assumption or an estimate.
 
 Reproduce with one command from the repository root: `npm ci && npm run build && npx playwright install chromium && npm run bench && npm run bench:browser`
 
@@ -124,8 +124,8 @@ Totals: without the guard 36 duplicates, 12 of which are the known limitation co
 
 ## Not run
 
-- Claude via the Claude Agent SDK (claude-agent-sdk), API and browser paths: no API key in the environment; needs Hammed's approval (run `npm run bench:real -- --confirm-spend --max-spend-usd <dollars>` with ANTHROPIC_API_KEY set)
-- OpenAI via the Chat Completions API (openai), API and browser paths: no API key in the environment; needs Hammed's approval (run `npm run bench:real -- --confirm-spend --max-spend-usd <dollars>` with OPENAI_API_KEY, AGENT_ONCE_OPENAI_MODEL, AGENT_ONCE_OPENAI_INPUT_USD_PER_MTOK, AGENT_ONCE_OPENAI_OUTPUT_USD_PER_MTOK set)
+- Claude via the Claude Agent SDK (claude-agent-sdk), API and browser paths: no API key in the environment; needs the maintainer's approval and an API key (run `npm run bench:real -- --confirm-spend --max-spend-usd <dollars>` with ANTHROPIC_API_KEY set)
+- OpenAI via the Chat Completions API (openai), API and browser paths: no API key in the environment; needs the maintainer's approval and an API key (run `npm run bench:real -- --confirm-spend --max-spend-usd <dollars>` with OPENAI_API_KEY, AGENT_ONCE_OPENAI_MODEL, AGENT_ONCE_OPENAI_INPUT_USD_PER_MTOK, AGENT_ONCE_OPENAI_OUTPUT_USD_PER_MTOK set)
 - crash_mid_run on the browser path: there is no crash harness for the browser path in this release; it is measured on the API path only.
 - Postgres and Redis ledgers: not part of v1, so not measured. Every overhead number above is SQLite.
 
@@ -150,8 +150,8 @@ Token-usage inputs for planning, from the scripted runs and stated assumptions:
 - browser tool calls per run: mean 6.3, max 12 (scripted browser agent)
 - browser tool response size: mean 475 characters per call, about 119 tokens at an assumed 4 characters per token; the largest run returned 5672 characters in total
 - browser_snapshot size: mean 546 characters, about 137 tokens at the same assumed ratio; largest 626 characters, about 157 tokens, over 300 snapshots of the reference pages (small forms; snapshots of other sites were not measured)
-- input tokens per model call: the system prompt and tool definitions (not measured here) plus the whole conversation so far, so call k of a run re-sends the k - 1 earlier tool results; per run that is about C x B + R x C x (C - 1) / 2 tokens for C calls, B fixed tokens and R tokens per tool result
-- output tokens per model call: assumed about 100 (one tool call with short arguments); not measured
+- input tokens per model turn: the system prompt and tool definitions (not measured here) plus the whole conversation so far, so turn k of a run re-sends the k - 1 earlier tool results; per run that is about C x B + R x C x (C - 1) / 2 tokens for C turns of one tool call each, B fixed tokens and R tokens per tool result
+- output tokens per model turn: assumed 500 (the tool call, its arguments and any text around it), as in the cost estimate above; not measured
 - a real model may call more or fewer tools than the scripted agents; the scripted counts above are a starting point, not a measurement of any model
 
 ## Failures

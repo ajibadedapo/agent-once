@@ -4,7 +4,7 @@ import { LedgerConflictError, LedgerUnavailableError, LedgerUsageError } from '.
 import {
   NESTED_TRANSACT,
   THENABLE_RESULT,
-  isInDoubtState,
+  isUnresolvedEvent,
   isThenable,
   type LedgerEvent,
   type LedgerStore,
@@ -60,12 +60,15 @@ export class MemoryLedgerStore implements LedgerStore {
 
   listInDoubt(nowMs: number): LedgerEvent[] {
     this.assertOpen();
-    const newestByAction = new Map<string, StoredEvent>();
-    for (const stored of this.events) newestByAction.set(stored.fields.actionId, stored);
-    return [...newestByAction.values()]
-      .filter((stored) => isInDoubtState(stored.fields.state) && stored.fields.expiresAtMs > nowMs)
+    const latestByIntent = new Map<string, StoredEvent>();
+    for (const stored of this.events) {
+      const latest = latestByIntent.get(stored.fields.intentHash);
+      if (latest === undefined || stored.fields.occurrence >= latest.fields.occurrence) latestByIntent.set(stored.fields.intentHash, stored);
+    }
+    return [...latestByIntent.values()]
       .sort((a, b) => a.fields.seq - b.fields.seq)
-      .map(materialize);
+      .map(materialize)
+      .filter((event) => isUnresolvedEvent(event, nowMs));
   }
 
   close(): void {

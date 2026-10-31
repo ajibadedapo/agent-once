@@ -10,6 +10,7 @@ import {
   NESTED_TRANSACT,
   THENABLE_RESULT,
   isThenable,
+  isUnresolvedEvent,
   type GuardPolicy,
   type LedgerEvent,
   type LedgerState,
@@ -191,8 +192,11 @@ export class SqliteLedgerStore implements LedgerStore {
     this.findActionStatement = db.prepare('SELECT * FROM events WHERE action_id = ? ORDER BY seq DESC LIMIT 1');
     this.inDoubtStatement = db.prepare(
       `SELECT * FROM events AS e
-       WHERE e.state IN ('intended', 'sent') AND e.expires_at_ms > ?
-         AND NOT EXISTS (SELECT 1 FROM events AS later WHERE later.action_id = e.action_id AND later.seq > e.seq)
+       WHERE e.state IN ('intended', 'sent', 'failed') AND e.expires_at_ms > ?
+         AND NOT EXISTS (
+           SELECT 1 FROM events AS later
+           WHERE later.intent_hash = e.intent_hash AND (later.occurrence > e.occurrence OR (later.occurrence = e.occurrence AND later.seq > e.seq))
+         )
        ORDER BY e.seq`,
     );
     this.actionsStatement = db.prepare(
@@ -269,7 +273,7 @@ export class SqliteLedgerStore implements LedgerStore {
   listInDoubt(nowMs: number): LedgerEvent[] {
     this.connection();
     try {
-      return (this.inDoubtStatement.all(nowMs) as unknown as EventRow[]).map(toEvent);
+      return (this.inDoubtStatement.all(nowMs) as unknown as EventRow[]).map(toEvent).filter((event) => isUnresolvedEvent(event, nowMs));
     } catch (error) {
       throw unavailable(error, 'cannot read the ledger');
     }

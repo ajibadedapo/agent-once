@@ -68,7 +68,7 @@ export const shop = createSdkMcpServer({
 - the recorded result with an "already happened" notice on a replay;
 - an error result explaining the doubt or the block otherwise, with the action id.
 
-A handler that throws is recorded as a transport error, so the action is in doubt, and the error is rethrown.
+A handler that throws is recorded as a transport error, so the action is in doubt, and the error is rethrown. A handler that resolves to `null` or `undefined` instead of a result object is recorded the same way (as a transport error, in doubt) and the resulting `TypeError` is thrown. Always return a `CallToolResult` object.
 
 ## Playwright MCP preset
 

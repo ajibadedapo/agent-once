@@ -21,7 +21,7 @@ const RESULTS_MD = join(ROOT, 'RESULTS.md');
 const REPRODUCE = 'npm ci && npm run build && npx playwright install chromium && npm run bench && npm run bench:browser';
 const BROWSER_RUNS_PER_CELL = 3;
 const API_RUNS_PER_CELL = 1;
-const NEEDS_APPROVAL = "no API key in the environment; needs Hammed's approval";
+const NEEDS_APPROVAL = "no API key in the environment; needs the maintainer's approval and an API key";
 const REAL_AGENT_LABELS: Readonly<Record<string, string>> = {
   'claude-agent-sdk': 'Claude via the Claude Agent SDK (claude-agent-sdk)',
   openai: 'OpenAI via the Chat Completions API (openai)',

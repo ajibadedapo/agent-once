@@ -6,12 +6,12 @@ Date: 2026-10-31. Owner: Hammed Ajibade. Status: draft for approval. Part of Age
 
 AI agents now take real actions: pay, order, book, email, submit, deploy. When an action's response is lost (timeout, dropped connection, crashed run), the agent cannot tell whether it happened. Retrying can do it twice; giving up can leave it undone.
 
-Evidence (all checked 30 to 31 Oct 2026):
-- UndoBench: naive retry caused duplicate mutations in 53.33% of fault-injected runs.
-- CUA-Recovery (arXiv 2610.27645): agents recognised inherited errors at most 44.0% of the time.
-- Idempotency comes up in 131 LangGraph issues, 97 Claude Code issues and 82 browser-use issues (GitHub full-text search, noisy).
-- Developers write about it ("Your AI Agent Will Double-Charge on a Lost Response", dev.to 2026), but there are only 20 HN stories on "agent idempotency" and 0 Stack Overflow questions. The demand is real but latent, so the product must prevent the problem by default, not only detect it.
-- Host audiences: @playwright/mcp 25.6M npm downloads per month, browser-use 8.06M PyPI downloads per month, @modelcontextprotocol/sdk 258M npm per month.
+Evidence (all checked 30 to 31 Oct 2026; every figure below is external and must be re-verified against its source before it is used anywhere public):
+- Re-verify before posting: UndoBench: naive retry caused duplicate external effects in 53.33% of trials (512 of 960) in its lost-acknowledgment study. Source: arXiv 2610.05622, https://arxiv.org/abs/2610.05622
+- Re-verify before posting: CUA-Recovery: agents recognised inherited errors at most 44.0% of the time. Source: arXiv 2610.27645, https://arxiv.org/abs/2610.27645
+- Re-verify before posting: idempotency comes up in 131 LangGraph issues, 97 Claude Code issues and 82 browser-use issues (GitHub full-text search, noisy).
+- Re-verify before posting: developers write about it ("Your AI Agent Will Double-Charge on a Lost Response", https://dev.to/0012303/your-ai-agent-will-double-charge-on-a-lost-response-5eed), but there are only 20 HN stories on "agent idempotency" and 0 Stack Overflow questions. The demand is real but latent, so the product must prevent the problem by default, not only detect it.
+- Re-verify before posting: host audiences (npm and PyPI download statistics): @playwright/mcp 25.6M npm downloads per month, browser-use 8.06M PyPI downloads per month, @modelcontextprotocol/sdk 258M npm per month.
 
 Hammed's bar: "the final product, good enough for even Anthropic to want to use."
 
@@ -92,4 +92,4 @@ Internal module layout, canonical hashing details, SQLite schema, docs tooling, 
 - The proxy's main value is stopping agent-level retries: an agent that gets an error or timeout result and calls the tool again. That is the dominant duplicate path for browser agents. The proxy cannot see a lost response between the browser and the remote site, so reconciliation there relies on page-aware read-back.
 - `tools/call` has no idempotency field; keys are only added on the HTTP path, which covers direct API calls, not browser form posts.
 - Latency target: under 5 ms per guarded call on SQLite with WAL and synchronous=NORMAL, measured and published; Postgres is reported separately.
-- All public numbers (UndoBench 53.33%, arXiv 2610.27645, npm figures) are re-verified at launch time before going into the README.
+- External numbers (UndoBench 53.33%, arXiv 2610.27645, npm figures) stay out of the README and docs. They appear only in the launch drafts under docs/launch, each marked "Re-verify before posting:" with its source, and are re-verified on the day of posting.

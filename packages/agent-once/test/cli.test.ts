@@ -342,6 +342,23 @@ describe('agent-once ledger list', () => {
     ]);
   });
 
+  test('cli ledger list --in-doubt shows a failed block-on-doubt action that resolve accepts', () => {
+    const home = tempDir();
+    const click = { tool: 'browser_click', toolClass: 'money' as const, policy: 'block-on-doubt' as const };
+    seed(home, [
+      event('ao_504', 'intended', click),
+      event('ao_504', 'sent', click),
+      event('ao_504', 'failed', { ...click, detail: { failure_kind: 'error_result', error: 'the tool returned an error result', result: null } }),
+      event('ao_stale', 'intended'),
+      event('ao_stale', 'failed', { detail: { failure_kind: 'not_dispatched', error: 'Ref e12 not found', result: null } }),
+    ]);
+    const listed = runCli(['ledger', 'list', '--in-doubt', '--json'], home);
+    expect(listed.status).toBe(0);
+    expect((JSON.parse(listed.stdout) as { action_id: string; state: string }[]).map((row) => [row.action_id, row.state])).toEqual([['ao_504', 'failed']]);
+    expect(runCli(['resolve', 'ao_504', '--happened'], home).status).toBe(0);
+    expect(runCli(['ledger', 'list', '--in-doubt'], home).stdout).toBe('No actions in doubt.\n');
+  });
+
   test('cli ledger list --json prints the latest state of every action', () => {
     const home = tempDir();
     seed(home, [event('ao_doubt', 'intended'), event('ao_done', 'intended', { intentHash: 'intent-done', argsJson: null }), event('ao_done', 'confirmed', { intentHash: 'intent-done', argsJson: null })]);

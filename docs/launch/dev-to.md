@@ -2,7 +2,7 @@
 
 Status: draft. Not posted. Every external figure is marked "Re-verify before posting:" and must be checked against its source; all other numbers come from RESULTS.md.
 
-Title: My AI agent placed the order twice. Here is the guard I built.
+Title: agent-once: stop your AI agent from charging, booking or sending twice
 
 Tags: ai, mcp, testing, opensource
 
@@ -59,8 +59,8 @@ Real models. The harness, spend cap and cost estimate are in place, but the publ
 
 ## Why now
 
-- Re-verify before posting: UndoBench measured duplicate mutations in 53.33% of fault-injected runs with naive retry. Source: the UndoBench paper and results.
-- Re-verify before posting: in CUA-Recovery, agents recognised inherited errors at most 44.0% of the time. Source: arXiv 2610.27645.
-- Re-verify before posting: the dev.to post "Your AI Agent Will Double-Charge on a Lost Response" describes the same failure. Source: dev.to, 2026.
+- Re-verify before posting: UndoBench reports that naive retry produced duplicate external effects in 53.33% of trials (512 of 960) in its lost-acknowledgment study; the paper reports other naive-retry rates for other settings, so quote this one with its setting. Source: "UndoBench: Separating Task Competence from Recovery Capability in Tool-Using AI Agents", Dolly Sah, Tanmay Sah, Harshul Jain and Tanya Sah, arXiv 2610.05622, https://arxiv.org/abs/2610.05622
+- Re-verify before posting: CUA-Recovery found that agents recognised inherited errors (its Error Awareness Rate) at most 44.0% of the time across six agents. Source: "CUA-Recovery: Benchmarking Error Recovery in Long-Horizon Computer-Use Agents", Xu Hu et al., arXiv 2610.27645, https://arxiv.org/abs/2610.27645
+- Re-verify before posting: the post "Your AI Agent Will Double-Charge on a Lost Response" describes the same failure. Source: DEV Community, author 0012303, https://dev.to/0012303/your-ai-agent-will-double-charge-on-a-lost-response-5eed
 
 agent-once is Apache 2.0, has no telemetry, and has a TypeScript package (`agent-once`) and a Python one (`once-guard`). Issues and odd MCP servers welcome.

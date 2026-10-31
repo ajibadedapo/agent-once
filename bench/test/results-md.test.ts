@@ -142,6 +142,8 @@ describe('renderResults', () => {
     expect(estimate).toMatch(/\| Model A \| \$2\.00 \| \$10\.00 \| \$0\.20 \| \$0\.14 \| \$0\.39 \| \$30 \| \$85 \|/);
     expect(estimate).toMatch(/\| Model B \| \$4\.00 \| \$20\.00 \| \$0\.20 \| \$0\.25 \| \$0\.78 \| \$54 \| \$169 \|/);
     expect(estimate).toContain('- openai is not estimated here.');
+    expect(estimate).toContain('- output tokens per model turn: assumed 500 (the tool call, its arguments and any text around it), as in the cost estimate above; not measured');
+    expect(estimate).not.toMatch(/output tokens per model call/);
     expect(markdown.split('\n')[2]).toContain('cost estimate');
   });
 

@@ -41,8 +41,10 @@ export interface LedgerStore {
   close(): void;
 }
 
-export function isInDoubtState(state: LedgerState): boolean {
-  return state === 'intended' || state === 'sent';
+export function isUnresolvedEvent(event: Pick<LedgerEvent, 'state' | 'expiresAtMs' | 'detail'>, nowMs: number): boolean {
+  if (event.expiresAtMs <= nowMs) return false;
+  if (event.state === 'intended' || event.state === 'sent') return true;
+  return event.state === 'failed' && event.detail.failure_kind !== 'not_dispatched';
 }
 
 export function isThenable(value: unknown): boolean {

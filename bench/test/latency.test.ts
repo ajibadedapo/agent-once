@@ -26,6 +26,12 @@ describe('latency statistics', () => {
     expect(stats.p50Ms).toBeCloseTo(0.5, 9);
     expect(stats.p99Ms).toBeCloseTo(0.99, 9);
     expect(stats.meanMs).toBeCloseTo(0.505, 9);
+    expect(stats.overThreshold).toBe(0);
+  });
+
+  test('counts the guarded calls whose overhead is above the threshold', () => {
+    const stats = overheadStats([0.5, 1.5, 3, 1], [0, 0, 0.5, 0], 1);
+    expect(stats.overThreshold).toBe(2);
   });
 
   test('samples must pair up and must not be empty', () => {
@@ -40,8 +46,11 @@ describe('latency statistics', () => {
     expect(report.iterations).toBe(20);
     expect(report.warmup).toBe(3);
     expect(report.python).toBeNull();
-    expect(report.core.p50Ms).toBeGreaterThanOrEqual(0);
-    expect(report.proxy.p50Ms).toBeGreaterThanOrEqual(0);
+    for (const row of [report.core, report.proxy]) {
+      expect(row).toEqual({ p50Ms: 0, p99Ms: 0, meanMs: 0, overThreshold: 0 });
+    }
+    expect(report.tail.thresholdMs).toBe(1);
+    expect(report.tail.probe).toEqual({ defaultCheckpoint: [0, 0, 0], noAutocheckpoint: [0, 0, 0], memoryLedger: [0, 0, 0], samples: 20 });
     expect(report.machine.sqlite).toMatch(/^\d+\.\d+\.\d+$/);
     expect(report.machine.node).toBe(process.version);
   });

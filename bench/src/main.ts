@@ -7,8 +7,13 @@ import { REAL_CLOCK_HOLD_MS, REAL_CLOCK_SETTLE_SECONDS, TARGET_NAMES, type Targe
 import { BROWSER_RETRY_DELAYS_MS } from './browser-agent.js';
 import { FULL_LATENCY, measureLatency, SMOKE_LATENCY, type LatencyReport } from './latency.js';
 import { API_SCENARIOS, BROWSER_PATH_SCENARIOS, runBenchMatrix, type BenchRecord } from './matrix.js';
-import { CONFIRM_SPEND_FLAG, realAgents, realCommand, REAL_RUNS_PER_CELL } from './real-agents/gate.js';
-import { renderResults } from './results-md.js';
+import { CONFIRM_SPEND_FLAG, MAX_SPEND_FLAG, realAgents, realCommand, REAL_RUNS_PER_CELL } from './real-agents/gate.js';
+import { renderResults, type RealSpend } from './results-md.js';
+
+interface RealStore {
+  records: BenchRecord[];
+  spend: RealSpend;
+}
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const RESULTS_DIR = join(ROOT, 'bench', 'results');
@@ -90,7 +95,7 @@ function notRun(realRecords: BenchRecord[]): string[] {
   const ran = new Set(realRecords.map((record) => record.agent));
   const lines = realAgents()
     .filter((agent) => !ran.has(agent.name))
-    .map((agent) => `${REAL_AGENT_LABELS[agent.name] ?? agent.name}, API and browser paths: ${NEEDS_APPROVAL} (run \`npm run bench:real -- ${CONFIRM_SPEND_FLAG}\` with ${agent.keyEnv} set)`);
+    .map((agent) => `${REAL_AGENT_LABELS[agent.name] ?? agent.name}, API and browser paths: ${NEEDS_APPROVAL} (run \`npm run bench:real -- ${CONFIRM_SPEND_FLAG} ${MAX_SPEND_FLAG} <dollars>\` with ${[agent.keyEnv, ...agent.requiredEnv].join(', ')} set)`);
   return [
     ...lines,
     'crash_mid_run on the browser path: there is no crash harness for the browser path in this release; it is measured on the API path only.',
@@ -102,14 +107,14 @@ function writeResults(): void {
   const latency = load<LatencyReport>('latency');
   const api = load<BenchRecord[]>('api');
   const browser = load<BenchRecord[]>('browser');
-  const real = load<BenchRecord[]>('real');
-  const records = [...(api?.data ?? []), ...(browser?.data ?? []), ...(real?.data ?? [])];
+  const real = load<RealStore>('real');
+  const records = [...(api?.data ?? []), ...(browser?.data ?? []), ...(real?.data.records ?? [])];
   const markdown = renderResults({
     command: REPRODUCE,
     generatedAt: new Date().toISOString(),
     latency: latency?.data ?? null,
     records,
-    notRun: notRun(real?.data ?? []),
+    notRun: notRun(real?.data.records ?? []),
     realRunPlan: {
       agents: realAgents().map((agent) => agent.name),
       runsPerCell: REAL_RUNS_PER_CELL,
@@ -123,6 +128,7 @@ function writeResults(): void {
       ...(real === undefined ? {} : { real: `${real.measuredAt} by \`${real.command}\`` }),
     },
     browserSetup: browserSetup(),
+    ...(real === undefined ? {} : { realSpend: real.data.spend }),
   });
   writeFileSync(RESULTS_MD, markdown);
   log(`wrote ${RESULTS_MD}`);
@@ -181,23 +187,28 @@ async function realRun(argv: string[]): Promise<number> {
     argv,
     runMatrix: (options) => {
       const agentsInRun = new Set(options.agents.map((agent) => (typeof agent === 'string' ? agent : agent.name)));
-      const earlier = (load<BenchRecord[]>('real')?.data ?? []).filter((record) => !agentsInRun.has(record.agent));
+      const earlier = (load<RealStore>('real')?.data.records ?? []).filter((record) => !agentsInRun.has(record.agent));
+      const limitUsd = options.budget?.limitUsd ?? 0;
       return runBenchMatrix({
         ...options,
         onRecord: (record) => {
           progress(record);
           runRecords.push(record);
-          save('real', 'npm run bench:real', [...earlier, ...runRecords]);
+          save<RealStore>('real', 'npm run bench:real', { records: [...earlier, ...runRecords], spend: { limitUsd, stoppedAtLimit: options.budget?.stoppedAtLimit ?? false } });
         },
       });
     },
     log,
   });
-  if (runRecords.length > 0) writeResults();
+  const stored = load<RealStore>('real');
+  if (runRecords.length > 0 && stored !== undefined && outcome.limitUsd !== undefined) {
+    save<RealStore>('real', 'npm run bench:real', { records: stored.data.records, spend: { limitUsd: outcome.limitUsd, stoppedAtLimit: outcome.stoppedAtLimit ?? false } });
+    writeResults();
+  }
   return outcome.exitCode;
 }
 
-const USAGE = 'usage: node dist/main.js latency [--smoke] | api | browser [--runs <n>] [--targets a,b] | real --confirm-spend';
+const USAGE = 'usage: node dist/main.js latency [--smoke] | api | browser [--runs <n>] [--targets a,b] | real --confirm-spend --max-spend-usd <dollars>';
 
 async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;

@@ -1,4 +1,4 @@
-import type { LatencyReport, OverheadStats } from './latency.js';
+import type { LatencyReport, OverheadStats, TailReport } from './latency.js';
 import type { BenchPath, BenchRecord } from './matrix.js';
 
 export interface RealRunPlan {
@@ -17,6 +17,12 @@ export interface ResultsInput {
   realRunPlan: RealRunPlan;
   measuredAt?: Partial<Record<'latency' | 'real' | BenchPath, string>>;
   browserSetup?: string;
+  realSpend?: RealSpend;
+}
+
+export interface RealSpend {
+  limitUsd: number;
+  stoppedAtLimit: boolean;
 }
 
 export const LATENCY_TARGET_MS = 5;
@@ -56,8 +62,21 @@ function measuredLine(input: ResultsInput, key: 'latency' | 'real' | BenchPath):
 }
 
 function overheadRow(label: string, stats: OverheadStats | null, iterations: number): string {
-  if (stats === null) return `| ${label} | not measured | not measured | not measured | not measured |`;
-  return `| ${label} | ${ms(stats.p50Ms)} | ${ms(stats.p99Ms)} | ${ms(stats.meanMs)} | ${iterations} |`;
+  if (stats === null) return `| ${label} | not measured | not measured | not measured | not measured | not measured |`;
+  return `| ${label} | ${ms(stats.p50Ms)} | ${ms(stats.p99Ms)} | ${ms(stats.meanMs)} | ${rate(stats.overThreshold, iterations)} | ${iterations} |`;
+}
+
+function tailLines(tail: TailReport): string[] {
+  const probe = tail.probe;
+  if (probe === null) return [];
+  const { defaultCheckpoint, noAutocheckpoint, memoryLedger, samples } = probe;
+  const list = (values: number[]): string => values.join(', ');
+  const counts = `Tail probe, core only, ${defaultCheckpoint.length} interleaved repeats of ${samples} guarded calls per mode, calls over ${tail.thresholdMs} ms: default WAL auto-checkpoint ${list(defaultCheckpoint)}; wal_autocheckpoint = 0: ${list(noAutocheckpoint)}; in-memory ledger: ${list(memoryLedger)}.`;
+  const separated = defaultCheckpoint.length > 0 && noAutocheckpoint.length > 0 && Math.max(...noAutocheckpoint) < Math.min(...defaultCheckpoint);
+  const attribution = separated
+    ? `In every repeat turning off WAL auto-checkpoint left fewer slow calls (at most ${Math.max(...noAutocheckpoint)}, against at least ${Math.min(...defaultCheckpoint)}), so that difference is attributed to WAL auto-checkpoint. The slow calls that remain with it off are not attributed to a cause.`
+    : 'The repeats overlap, so no cause is given for the tail.';
+  return [`${counts} ${attribution}`, ''];
 }
 
 function overheadSection(input: ResultsInput): string[] {
@@ -80,12 +99,13 @@ function overheadSection(input: ResultsInput): string[] {
     '',
     `Overhead is the paired difference between a guarded call and the same call without the guard, over ${latency.iterations} iterations after ${latency.warmup} warm-up calls. Every guarded call is a new action, so each one writes intended, sent and confirmed to a ledger file. Core and Python wrap a no-op; the proxy row compares a guarded tool with a pass tool on the same in-process proxy and upstream.`,
     '',
-    '| Measurement | p50 ms | p99 ms | mean ms | Iterations |',
-    '|---|---|---|---|---|',
+    `| Measurement | p50 ms | p99 ms | mean ms | Over ${latency.tail.thresholdMs} ms | Iterations |`,
+    '|---|---|---|---|---|---|',
     overheadRow('Core: Guard.run on SQLite WAL', latency.core, latency.iterations),
     overheadRow('Proxy: guarded tools/call through the in-process MCP proxy', latency.proxy, latency.iterations),
     overheadRow('Python: Guard.run on sqlite3 WAL', latency.python, latency.iterations),
     '',
+    ...tailLines(latency.tail),
     `Machine: ${machine.cpu}, ${machine.os}. Node ${machine.node}, SQLite ${machine.sqlite} (node:sqlite). ${python}.`,
     '',
   ];
@@ -145,12 +165,45 @@ function timesText(runs: string): string {
   return runs === '1' ? 'once' : `${runs} times`;
 }
 
-function matrixTable(records: BenchRecord[]): string[] {
+function meanDuration(runs: BenchRecord[]): string {
+  if (runs.length === 0) return 'not run';
+  return `${(runs.reduce((sum, record) => sum + record.durationMs, 0) / runs.length / 1000).toFixed(1)} s`;
+}
+
+function spendText(runs: BenchRecord[]): string {
+  const costs = runs.map((record) => record.spend?.costUsd).filter((cost): cost is number => typeof cost === 'number');
+  if (costs.length === 0) return runs.length === 0 ? 'not run' : 'not recorded';
+  const total = usd(costs.reduce((sum, cost) => sum + cost, 0));
+  return costs.length === runs.length ? total : `${total} (${costs.length} of ${runs.length} runs priced)`;
+}
+
+function usd(value: number): string {
+  return `$${value.toFixed(4)}`;
+}
+
+function matrixTable(records: BenchRecord[], withSpend = false): string[] {
+  const spendHeader = withSpend ? ' Spend, guard off | Spend, guard on |' : '';
+  const spendRule = withSpend ? '---|---|' : '';
   return [
-    '| Agent | Scenario | Target | Runs, guard off | Duplicate rate, guard off | Missing rate, guard off | Runs, guard on | Duplicate rate, guard on | Missing rate, guard on |',
-    '|---|---|---|---|---|---|---|---|---|',
-    ...cells(records).map((entry) => `| ${cell(entry.agent)} | ${entry.scenario} | ${entry.target} | ${modeColumns(entry.off)} | ${modeColumns(entry.on)} |`),
+    `| Agent | Scenario | Target | Runs, guard off | Duplicate rate, guard off | Missing rate, guard off | Runs, guard on | Duplicate rate, guard on | Missing rate, guard on | Mean duration, guard off | Mean duration, guard on |${spendHeader}`,
+    `|---|---|---|---|---|---|---|---|---|---|---|${spendRule}`,
+    ...cells(records).map((entry) => {
+      const spend = withSpend ? ` ${spendText(entry.off)} | ${spendText(entry.on)} |` : '';
+      return `| ${cell(entry.agent)} | ${entry.scenario} | ${entry.target} | ${modeColumns(entry.off)} | ${modeColumns(entry.on)} | ${meanDuration(entry.off)} | ${meanDuration(entry.on)} |${spend}`;
+    }),
   ];
+}
+
+function spendSummary(records: BenchRecord[], limit: RealSpend | undefined): string {
+  const priced = records.filter((record) => typeof record.spend?.costUsd === 'number');
+  const total = priced.reduce((sum, record) => sum + (record.spend?.costUsd ?? 0), 0);
+  const input = records.reduce((sum, record) => sum + (record.spend?.inputTokens ?? 0), 0);
+  const output = records.reduce((sum, record) => sum + (record.spend?.outputTokens ?? 0), 0);
+  const unpriced = records.length - priced.length;
+  const parts = [`Recorded spend, all stored real-model runs: ${usd(total)} over ${plural(records.length, 'run')} (${input} input and ${output} output tokens).`];
+  if (unpriced > 0) parts.push(`${plural(unpriced, 'run')} did not report a cost.`);
+  if (limit !== undefined) parts.push(`Spend limit of the latest bench:real run: $${limit.limitUsd.toFixed(2)}; ${limit.stoppedAtLimit ? 'bench:real stopped launching runs at the limit, so some planned runs are missing.' : 'the limit did not stop any run.'}`);
+  return parts.join(' ');
 }
 
 function apiSection(input: ResultsInput): string[] {
@@ -160,7 +213,7 @@ function apiSection(input: ResultsInput): string[] {
   return [
     ...heading,
     ...measuredLine(input, 'api'),
-    `Scripted agents call the four reference targets through the targets MCP server, with and without the guard, on a manual clock. The scripted agents are deterministic, so each cell runs ${timesText(runsPerCell(records))}: repeating a cell gives the same result. scripted:naive retries every error after a growing delay of simulated time; scripted:obedient checks the list tool and resolves the action when the guard reports doubt.`,
+    `Scripted agents call the four reference targets through the targets MCP server, with and without the guard, on a manual clock, so the mean durations are simulated time. The scripted agents are deterministic, so each cell runs ${timesText(runsPerCell(records))}: repeating a cell gives the same result. scripted:naive retries every error after a growing delay of simulated time; scripted:obedient checks the list tool and resolves the action when the guard reports doubt.`,
     '',
     totalsLine(records),
     '',
@@ -194,12 +247,14 @@ function realSection(input: ResultsInput): string[] {
     '## Real-model runs',
     '',
     ...measuredLine(input, 'real'),
-    'Real models called through bench:real. Unlike the scripted agents they are not deterministic, so every cell reports its own run count.',
+    'Real models called through bench:real. Unlike the scripted agents they are not deterministic, so every cell reports its own run count. Spend is what each adapter recorded from the provider response.',
+    '',
+    spendSummary(records, input.realSpend),
     '',
     ...paths.flatMap((path) => {
       const rows = records.filter((record) => record.path === path);
       if (rows.length === 0) return [];
-      return [`### ${PATH_LABELS[path]}`, '', totalsLine(rows), '', ...matrixTable(rows), ''];
+      return [`### ${PATH_LABELS[path]}`, '', totalsLine(rows), '', ...matrixTable(rows, true), ''];
     }),
   ];
 }
@@ -282,7 +337,7 @@ function failureLine(record: BenchRecord): string {
   const kind = record.duplicate ? 'duplicate' : 'missing';
   const limitation = knownLimitation(record);
   const note = limitation === undefined ? '' : ` (known limitation: ${limitation.split('. ')[0] ?? limitation})`;
-  return `- ${kind}: ${PATH_LABELS[record.path]}, ${record.agent}, ${record.scenario}, ${record.target}, ${record.effects} effects${note}`;
+  return `- ${kind}: ${where}, ${record.effects} effects${note}`;
 }
 
 function failuresSection(input: ResultsInput): string[] {

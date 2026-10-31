@@ -5,7 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { systemClock } from 'agent-once';
+import { ManualClock, systemClock } from 'agent-once';
 import {
   BROWSER_SCENARIOS,
   chaosTargetsPreset,
@@ -13,19 +13,25 @@ import {
   flushPendingCommits,
   REAL_CLOCK_HOLD_MS,
   REAL_CLOCK_SETTLE_SECONDS,
-  runMatrix,
+  CHAOS_START_MS,
+  runScenario,
+  runsFor,
   SCENARIO_NAMES,
   SCENARIOS,
   startExternalAgent,
   startTargets,
   TARGET_NAMES,
   TARGETS,
+  type RunnableScenario,
   type RunRecord,
+  type RunScenarioOptions,
   type ScenarioSpec,
   type TargetName,
 } from 'agent-once/chaos';
 import { guardMcpServers } from 'agent-once/claude-agent-sdk';
 import { naiveBrowserAgent } from './browser-agent.js';
+import { MAX_RUN_USD_ENV, readUsage, USAGE_FILE_ENV } from './real-agents/agent-env.js';
+import type { SpendBudget } from './real-agents/budget.js';
 
 export type BenchPath = 'api' | 'browser';
 
@@ -35,6 +41,12 @@ export interface ExternalBenchAgent {
 }
 
 export type BenchAgent = 'scripted:naive' | 'scripted:obedient' | ExternalBenchAgent;
+
+export interface RunSpend {
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number | null;
+}
 
 export interface BenchRecord {
   path: BenchPath;
@@ -50,6 +62,7 @@ export interface BenchRecord {
   durationMs: number;
   responseChars: number | null;
   snapshotChars?: number[];
+  spend?: RunSpend;
   agentExitCode?: number | null;
   agentError?: string;
 }
@@ -61,6 +74,7 @@ export interface BenchMatrixOptions {
   ledgerDir: string;
   targets?: TargetName[];
   agentTimeoutMs?: number;
+  budget?: SpendBudget;
   log?: (message: string) => void;
   onRecord?: (record: BenchRecord) => void;
 }
@@ -89,28 +103,6 @@ interface StdioCommand {
 function agentLabel(agent: BenchAgent, path: BenchPath): string {
   if (typeof agent !== 'string') return agent.name;
   return path === 'browser' ? SCRIPTED_BROWSER_AGENT : agent;
-}
-
-async function runApiPath(options: BenchMatrixOptions): Promise<BenchRecord[]> {
-  const names = new Map<string, string>();
-  const agents = options.agents.map((agent) => {
-    if (typeof agent === 'string') return agent;
-    names.set(agent.external.join(' '), agent.name);
-    return { external: agent.external };
-  });
-  const toBench = (record: RunRecord): BenchRecord => ({ path: 'api', ...record, agent: names.get(record.agent) ?? record.agent, responseChars: null });
-  const records = await runMatrix({
-    agents,
-    scenarios: API_SCENARIOS,
-    targets: options.targets ?? [...TARGET_NAMES],
-    guard: 'both',
-    runs: options.runs,
-    ledgerDir: options.ledgerDir,
-    ...(options.agentTimeoutMs === undefined ? {} : { agentTimeoutMs: options.agentTimeoutMs }),
-    ...(options.log === undefined ? {} : { log: options.log }),
-    ...(options.onRecord === undefined ? {} : { onRecord: (record: RunRecord) => options.onRecord?.(toBench(record)) }),
-  });
-  return records.map(toBench);
 }
 
 function browserSpec(scenario: BrowserPathScenario): ScenarioSpec {
@@ -239,36 +231,95 @@ export async function runBrowserScenario(options: BrowserScenarioOptions): Promi
   }
 }
 
-async function runBrowserPath(options: BenchMatrixOptions): Promise<BenchRecord[]> {
-  const records: BenchRecord[] = [];
-  for (const agent of options.agents) {
-    for (const guard of [false, true]) {
-      for (const scenario of BROWSER_PATH_SCENARIOS) {
-        for (const target of options.targets ?? TARGET_NAMES) {
-          for (let seed = 1; seed <= options.runs; seed += 1) {
-            const record = await runBrowserScenario({
-              scenario,
-              target,
-              agent,
-              guard,
-              ledgerDir: options.ledgerDir,
-              seed,
-              ...(options.agentTimeoutMs === undefined ? {} : { agentTimeoutMs: options.agentTimeoutMs }),
-            });
-            records.push(record);
-            options.onRecord?.(record);
+export interface BenchMatrixDeps {
+  runApiScenario: (options: RunScenarioOptions) => Promise<RunRecord>;
+  runBrowserScenario: (options: BrowserScenarioOptions) => Promise<BenchRecord>;
+}
+
+interface Cell {
+  path: BenchPath;
+  agent: BenchAgent;
+  guard: boolean;
+  scenario: string;
+  target: TargetName;
+  seed: number;
+}
+
+function* matrixCells(options: BenchMatrixOptions): Generator<Cell> {
+  const targets = options.targets ?? [...TARGET_NAMES];
+  for (const path of (['api', 'browser'] as const).filter((candidate) => options.paths.includes(candidate))) {
+    const scenarios: readonly string[] = path === 'api' ? API_SCENARIOS : BROWSER_PATH_SCENARIOS;
+    for (const agent of options.agents) {
+      const runs = path === 'api' ? runsFor(typeof agent === 'string' ? agent : { external: agent.external }, options.runs) : options.runs;
+      for (const guard of [false, true]) {
+        for (const scenario of scenarios) {
+          for (const target of targets) {
+            for (let seed = 1; seed <= runs; seed += 1) yield { path, agent, guard, scenario, target, seed };
           }
         }
       }
     }
   }
-  return records;
 }
 
-export async function runBenchMatrix(options: BenchMatrixOptions): Promise<BenchRecord[]> {
+interface PaidLaunch {
+  agent: ExternalBenchAgent;
+  usageFile: string;
+  capUsd: number;
+}
+
+function paidLaunch(agent: ExternalBenchAgent, budget: SpendBudget, ledgerDir: string, index: number): PaidLaunch {
+  const capUsd = budget.remainingUsd();
+  const usageFile = join(ledgerDir, `usage-${index}.jsonl`);
+  return { agent: { name: agent.name, external: ['env', `${USAGE_FILE_ENV}=${usageFile}`, `${MAX_RUN_USD_ENV}=${capUsd}`, ...agent.external] }, usageFile, capUsd };
+}
+
+async function runCell(cell: Cell, agent: BenchAgent, options: BenchMatrixOptions, deps: BenchMatrixDeps): Promise<BenchRecord> {
+  const timeout = options.agentTimeoutMs === undefined ? {} : { agentTimeoutMs: options.agentTimeoutMs };
+  if (cell.path === 'browser') {
+    return deps.runBrowserScenario({ scenario: cell.scenario as BrowserPathScenario, target: cell.target, agent, guard: cell.guard, ledgerDir: options.ledgerDir, seed: cell.seed, ...timeout });
+  }
+  const record = await deps.runApiScenario({
+    scenario: cell.scenario as RunnableScenario,
+    target: cell.target,
+    agent: typeof agent === 'string' ? agent : { external: agent.external },
+    guard: cell.guard,
+    clock: typeof agent === 'string' ? new ManualClock(CHAOS_START_MS) : 'real',
+    ledgerDir: options.ledgerDir,
+    seed: cell.seed,
+    ...timeout,
+    ...(options.log === undefined ? {} : { log: options.log }),
+  });
+  return { path: 'api', ...record, agent: agentLabel(cell.agent, 'api'), responseChars: null };
+}
+
+export async function runBenchMatrix(options: BenchMatrixOptions, deps: Partial<BenchMatrixDeps> = {}): Promise<BenchRecord[]> {
+  const run: BenchMatrixDeps = { runApiScenario: runScenario, runBrowserScenario, ...deps };
+  const budget = options.budget;
+  if (budget === undefined && options.agents.some((agent) => typeof agent !== 'string')) throw new Error('paid real-model agents need a spend budget');
   const records: BenchRecord[] = [];
-  if (options.paths.includes('api')) records.push(...(await runApiPath(options)));
-  if (options.paths.includes('browser')) records.push(...(await runBrowserPath(options)));
+  let paidIndex = 0;
+  for (const cell of matrixCells(options)) {
+    let launch: PaidLaunch | undefined;
+    if (typeof cell.agent !== 'string' && budget !== undefined) {
+      if (!budget.canLaunch()) {
+        options.log?.(`stopped launching paid runs at the spend limit of $${budget.limitUsd.toFixed(2)} after $${budget.spentUsd.toFixed(4)}`);
+        break;
+      }
+      paidIndex += 1;
+      launch = paidLaunch(cell.agent, budget, options.ledgerDir, paidIndex);
+    }
+    let record = await runCell(cell, launch?.agent ?? cell.agent, options, run);
+    if (launch !== undefined && budget !== undefined) {
+      const spend = readUsage(launch.usageFile);
+      const killed = record.agentError !== undefined && (record.agentExitCode === null || spend === undefined);
+      budget.record(killed ? null : (spend?.costUsd ?? null), launch.capUsd);
+      if (killed || (spend?.costUsd ?? null) === null) options.log?.(`charged the whole per-run cap of $${launch.capUsd.toFixed(4)} for ${launch.agent.name}: the run ${killed ? 'failed before reporting its full usage' : 'reported no cost'}`);
+      record = { ...record, agent: launch.agent.name, ...(spend === undefined ? {} : { spend }) };
+    }
+    records.push(record);
+    options.onRecord?.(record);
+  }
   return records;
 }
 

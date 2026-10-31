@@ -2,10 +2,23 @@ import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { agentTask, type RealAgent } from './agent-env.js';
+import { agentTask, MAX_RUN_USD_ENV, positiveNumberEnv, recordUsage, type RealAgent } from './agent-env.js';
 
 export const OPENAI_AGENT_NAME = 'openai';
 export const OPENAI_KEY_ENV = 'OPENAI_API_KEY';
+export const OPENAI_MODEL_ENV = 'AGENT_ONCE_OPENAI_MODEL';
+export const OPENAI_MAX_COMPLETION_TOKENS = 1_024;
+export const OPENAI_PRICE_ENVS = { input: 'AGENT_ONCE_OPENAI_INPUT_USD_PER_MTOK', output: 'AGENT_ONCE_OPENAI_OUTPUT_USD_PER_MTOK' } as const;
+
+export interface TokenPrices {
+  inputUsdPerMTok: number;
+  outputUsdPerMTok: number;
+}
+
+export interface CompletionUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+}
 
 const CHAT_COMPLETIONS_URL = 'https://api.openai.com/v1/chat/completions';
 const MAX_TURNS = 20;
@@ -31,13 +44,13 @@ interface AssistantMessage {
 
 interface Completion {
   choices: { message: AssistantMessage }[];
-  usage?: unknown;
+  usage?: CompletionUsage;
 }
 
 type ChatMessage = { role: 'user'; content: string } | AssistantMessage | { role: 'tool'; tool_call_id: string; content: string };
 
 export function openAiAgent(): RealAgent {
-  return { name: OPENAI_AGENT_NAME, keyEnv: OPENAI_KEY_ENV, external: [process.execPath, fileURLToPath(import.meta.url)] };
+  return { name: OPENAI_AGENT_NAME, keyEnv: OPENAI_KEY_ENV, requiredEnv: [OPENAI_MODEL_ENV, OPENAI_PRICE_ENVS.input, OPENAI_PRICE_ENVS.output], external: [process.execPath, fileURLToPath(import.meta.url)] };
 }
 
 function resultText(result: CallToolResult): string {
@@ -54,22 +67,47 @@ async function callTool(client: Client, call: ToolCall['function']): Promise<str
   }
 }
 
-async function complete(deps: OpenAiRunDeps, key: string, body: unknown): Promise<Completion> {
-  const response = await deps.fetch(CHAT_COMPLETIONS_URL, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  const text = await response.text();
+export async function requestCompletion(deps: OpenAiRunDeps, key: string, body: { model: string }): Promise<Completion> {
+  let response: Awaited<ReturnType<FetchFn>>;
+  let text: string;
+  try {
+    response = await deps.fetch(CHAT_COMPLETIONS_URL, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    text = await response.text();
+  } catch (error) {
+    recordUsage(deps.env, { agent: OPENAI_AGENT_NAME, model: body.model, inputTokens: 0, outputTokens: 0, costUsd: null });
+    throw error;
+  }
   if (!response.ok) throw new Error(`${OPENAI_AGENT_NAME} request failed with ${response.status}: ${text.slice(0, 500)}`);
   return JSON.parse(text) as Completion;
 }
 
+export function turnCostUsd(usage: CompletionUsage, prices: TokenPrices): number {
+  return (usage.prompt_tokens * prices.inputUsdPerMTok + usage.completion_tokens * prices.outputUsdPerMTok) / 1_000_000;
+}
+
+export function worstTurnCostUsd(promptTokensUpperBound: number, prices: TokenPrices): number {
+  return turnCostUsd({ prompt_tokens: promptTokensUpperBound, completion_tokens: OPENAI_MAX_COMPLETION_TOKENS }, prices);
+}
+
+export function turnFits(spentUsd: number, worstUsd: number, capUsd: number): boolean {
+  return spentUsd + worstUsd <= capUsd;
+}
+
 export async function runOpenAiAgent(deps: OpenAiRunDeps): Promise<void> {
   const task = agentTask(OPENAI_AGENT_NAME, OPENAI_KEY_ENV, deps.env);
-  const model = deps.env.AGENT_ONCE_OPENAI_MODEL;
-  if (model === undefined || model.trim() === '') throw new Error(`${OPENAI_AGENT_NAME} needs AGENT_ONCE_OPENAI_MODEL`);
+  const model = deps.env[OPENAI_MODEL_ENV];
+  if (model === undefined || model.trim() === '') throw new Error(`${OPENAI_AGENT_NAME} needs ${OPENAI_MODEL_ENV}`);
+  const prices: TokenPrices = {
+    inputUsdPerMTok: positiveNumberEnv(deps.env, OPENAI_PRICE_ENVS.input, OPENAI_AGENT_NAME),
+    outputUsdPerMTok: positiveNumberEnv(deps.env, OPENAI_PRICE_ENVS.output, OPENAI_AGENT_NAME),
+  };
+  const runCapUsd = positiveNumberEnv(deps.env, MAX_RUN_USD_ENV, OPENAI_AGENT_NAME);
+  let spentUsd = 0;
   const client = new Client({ name: 'agent-once-bench-openai', version: '1.0.0' });
   try {
     await client.connect(new StdioClientTransport({ command: task.command, args: task.args, env: task.serverEnv, stderr: 'ignore' }));
@@ -77,8 +115,15 @@ export async function runOpenAiAgent(deps: OpenAiRunDeps): Promise<void> {
     const functions = tools.map((tool) => ({ type: 'function', function: { name: tool.name, description: tool.description ?? '', parameters: tool.inputSchema } }));
     const messages: ChatMessage[] = [{ role: 'user', content: task.task }];
     for (let turn = 0; turn < MAX_TURNS; turn += 1) {
-      const completion = await complete(deps, task.key, { model, messages, tools: functions });
-      process.stdout.write(`${JSON.stringify({ agent: OPENAI_AGENT_NAME, turn, usage: completion.usage })}\n`);
+      const body = { model, messages, tools: functions, max_completion_tokens: OPENAI_MAX_COMPLETION_TOKENS };
+      const worstUsd = worstTurnCostUsd(Buffer.byteLength(JSON.stringify(body)), prices);
+      if (!turnFits(spentUsd, worstUsd, runCapUsd)) throw new Error(`${OPENAI_AGENT_NAME} stopped before a turn that could pass the per-run spend cap of $${runCapUsd}`);
+      const completion = await requestCompletion(deps, task.key, body);
+      const usage = completion.usage;
+      const costUsd = usage === undefined ? null : turnCostUsd(usage, prices);
+      recordUsage(deps.env, { agent: OPENAI_AGENT_NAME, model, inputTokens: usage?.prompt_tokens ?? 0, outputTokens: usage?.completion_tokens ?? 0, costUsd });
+      if (costUsd === null) throw new Error(`${OPENAI_AGENT_NAME} returned no usage, so the run cannot be kept under ${MAX_RUN_USD_ENV}`);
+      spentUsd += costUsd;
       const message = completion.choices[0]?.message;
       if (message === undefined) throw new Error(`${OPENAI_AGENT_NAME} returned no message`);
       messages.push(message);

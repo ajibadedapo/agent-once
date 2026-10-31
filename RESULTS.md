@@ -1,83 +1,85 @@
 # agent-once benchmark results
 
-Generated 2026-10-31T22:12:29.937Z. Every result in this file was measured by the commands below on the machine listed under Guard overhead. Nothing here is taken from another source. The only figures that are not measurements are the token-usage assumptions under Not run, and each is marked as an assumption.
+Generated 2026-10-31T22:25:35.728Z. Every result in this file was measured by the commands below on the machine listed under Guard overhead. Nothing here is taken from another source. The only figures that are not measurements are the token-usage assumptions under Not run, and each is marked as an assumption.
 
 Reproduce with one command from the repository root: `npm ci && npm run build && npx playwright install chromium && npm run bench && npm run bench:browser`
 
 ## Guard overhead
 
-Measured at 2026-10-31T22:12:29.718Z by `npm run bench`.
+Measured at 2026-10-31T22:25:35.501Z by `npm run bench`.
 
-Target: p50 under 5 ms per guarded call on SQLite WAL with synchronous NORMAL. Met: yes (core p50 0.100 ms, proxy p50 0.102 ms, Python p50 0.155 ms).
+Target: p50 under 5 ms per guarded call on SQLite WAL with synchronous NORMAL. Met: yes (core p50 0.102 ms, proxy p50 0.104 ms, Python p50 0.160 ms).
 
 Overhead is the paired difference between a guarded call and the same call without the guard, over 5000 iterations after 500 warm-up calls. Every guarded call is a new action, so each one writes intended, sent and confirmed to a ledger file. Core and Python wrap a no-op; the proxy row compares a guarded tool with a pass tool on the same in-process proxy and upstream.
 
-| Measurement | p50 ms | p99 ms | mean ms | Iterations |
-|---|---|---|---|---|
-| Core: Guard.run on SQLite WAL | 0.100 | 2.812 | 0.159 | 5000 |
-| Proxy: guarded tools/call through the in-process MCP proxy | 0.102 | 3.151 | 0.166 | 5000 |
-| Python: Guard.run on sqlite3 WAL | 0.155 | 2.936 | 0.213 | 5000 |
+| Measurement | p50 ms | p99 ms | mean ms | Over 1 ms | Iterations |
+|---|---|---|---|---|---|
+| Core: Guard.run on SQLite WAL | 0.102 | 2.992 | 0.162 | 2.0% (98/5000) | 5000 |
+| Proxy: guarded tools/call through the in-process MCP proxy | 0.104 | 3.314 | 0.172 | 2.0% (99/5000) | 5000 |
+| Python: Guard.run on sqlite3 WAL | 0.160 | 3.243 | 0.242 | 2.0% (102/5000) | 5000 |
+
+Tail probe, core only, 3 interleaved repeats of 5000 guarded calls per mode, calls over 1 ms: default WAL auto-checkpoint 107, 100, 98; wal_autocheckpoint = 0: 62, 51, 15; in-memory ledger: 0, 2, 0. In every repeat turning off WAL auto-checkpoint left fewer slow calls (at most 62, against at least 98), so that difference is attributed to WAL auto-checkpoint. The slow calls that remain with it off are not attributed to a cause.
 
 Machine: Apple M3 (8 cores), darwin 25.6.0 arm64. Node v22.23.4, SQLite 3.53.4 (node:sqlite). Python 3.12.13, SQLite 3.50.4 (sqlite3).
 
 ## API path
 
-Measured at 2026-10-31T22:12:29.936Z by `npm run bench`.
+Measured at 2026-10-31T22:25:35.726Z by `npm run bench`.
 
-Scripted agents call the four reference targets through the targets MCP server, with and without the guard, on a manual clock. The scripted agents are deterministic, so each cell runs once: repeating a cell gives the same result. scripted:naive retries every error after a growing delay of simulated time; scripted:obedient checks the list tool and resolves the action when the guard reports doubt.
+Scripted agents call the four reference targets through the targets MCP server, with and without the guard, on a manual clock, so the mean durations are simulated time. The scripted agents are deterministic, so each cell runs once: repeating a cell gives the same result. scripted:naive retries every error after a growing delay of simulated time; scripted:obedient checks the list tool and resolves the action when the guard reports doubt.
 
 Totals: without the guard 24 duplicates and 0 missing effects in 48 runs; with the guard 0 duplicates and 0 missing effects in 48 runs.
 
-| Agent | Scenario | Target | Runs, guard off | Duplicate rate, guard off | Missing rate, guard off | Runs, guard on | Duplicate rate, guard on | Missing rate, guard on |
-|---|---|---|---|---|---|---|---|---|
-| scripted:naive | lost_response_after_commit | checkout | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | lost_response_after_commit | booking | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | lost_response_after_commit | email | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | lost_response_after_commit | ticket | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | slow_commit | checkout | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | slow_commit | booking | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | slow_commit | email | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | slow_commit | ticket | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | timeout_before_commit | checkout | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | timeout_before_commit | booking | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | timeout_before_commit | email | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | timeout_before_commit | ticket | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | stale_element | checkout | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | stale_element | booking | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | stale_element | email | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | stale_element | ticket | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | crash_mid_run | checkout | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | crash_mid_run | booking | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | crash_mid_run | email | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | crash_mid_run | ticket | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | no_fault | checkout | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | no_fault | booking | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | no_fault | email | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:naive | no_fault | ticket | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | lost_response_after_commit | checkout | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | lost_response_after_commit | booking | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | lost_response_after_commit | email | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | lost_response_after_commit | ticket | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | slow_commit | checkout | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | slow_commit | booking | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | slow_commit | email | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | slow_commit | ticket | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | timeout_before_commit | checkout | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | timeout_before_commit | booking | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | timeout_before_commit | email | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | timeout_before_commit | ticket | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | stale_element | checkout | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | stale_element | booking | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | stale_element | email | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | stale_element | ticket | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | crash_mid_run | checkout | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | crash_mid_run | booking | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | crash_mid_run | email | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | crash_mid_run | ticket | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | no_fault | checkout | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | no_fault | booking | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | no_fault | email | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
-| scripted:obedient | no_fault | ticket | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) |
+| Agent | Scenario | Target | Runs, guard off | Duplicate rate, guard off | Missing rate, guard off | Runs, guard on | Duplicate rate, guard on | Missing rate, guard on | Mean duration, guard off | Mean duration, guard on |
+|---|---|---|---|---|---|---|---|---|---|---|
+| scripted:naive | lost_response_after_commit | checkout | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 2.0 s |
+| scripted:naive | lost_response_after_commit | booking | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 2.0 s |
+| scripted:naive | lost_response_after_commit | email | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 2.0 s |
+| scripted:naive | lost_response_after_commit | ticket | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 2.0 s |
+| scripted:naive | slow_commit | checkout | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 6.0 s |
+| scripted:naive | slow_commit | booking | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 6.0 s |
+| scripted:naive | slow_commit | email | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 6.0 s |
+| scripted:naive | slow_commit | ticket | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 6.0 s |
+| scripted:naive | timeout_before_commit | checkout | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 14.0 s |
+| scripted:naive | timeout_before_commit | booking | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 14.0 s |
+| scripted:naive | timeout_before_commit | email | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 14.0 s |
+| scripted:naive | timeout_before_commit | ticket | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 14.0 s |
+| scripted:naive | stale_element | checkout | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 2.0 s |
+| scripted:naive | stale_element | booking | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 2.0 s |
+| scripted:naive | stale_element | email | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 2.0 s |
+| scripted:naive | stale_element | ticket | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 2.0 s |
+| scripted:naive | crash_mid_run | checkout | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 6.0 s | 6.0 s |
+| scripted:naive | crash_mid_run | booking | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 6.0 s | 6.0 s |
+| scripted:naive | crash_mid_run | email | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 6.0 s | 6.0 s |
+| scripted:naive | crash_mid_run | ticket | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 6.0 s | 6.0 s |
+| scripted:naive | no_fault | checkout | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 0.0 s | 0.0 s |
+| scripted:naive | no_fault | booking | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 0.0 s | 0.0 s |
+| scripted:naive | no_fault | email | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 0.0 s | 0.0 s |
+| scripted:naive | no_fault | ticket | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 0.0 s | 0.0 s |
+| scripted:obedient | lost_response_after_commit | checkout | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 2.0 s |
+| scripted:obedient | lost_response_after_commit | booking | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 2.0 s |
+| scripted:obedient | lost_response_after_commit | email | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 2.0 s |
+| scripted:obedient | lost_response_after_commit | ticket | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 2.0 s |
+| scripted:obedient | slow_commit | checkout | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 17.0 s |
+| scripted:obedient | slow_commit | booking | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 17.0 s |
+| scripted:obedient | slow_commit | email | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 17.0 s |
+| scripted:obedient | slow_commit | ticket | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 17.0 s |
+| scripted:obedient | timeout_before_commit | checkout | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 17.0 s |
+| scripted:obedient | timeout_before_commit | booking | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 17.0 s |
+| scripted:obedient | timeout_before_commit | email | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 17.0 s |
+| scripted:obedient | timeout_before_commit | ticket | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 17.0 s |
+| scripted:obedient | stale_element | checkout | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 2.0 s |
+| scripted:obedient | stale_element | booking | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 2.0 s |
+| scripted:obedient | stale_element | email | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 2.0 s |
+| scripted:obedient | stale_element | ticket | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 2.0 s | 2.0 s |
+| scripted:obedient | crash_mid_run | checkout | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 6.0 s | 6.0 s |
+| scripted:obedient | crash_mid_run | booking | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 6.0 s | 6.0 s |
+| scripted:obedient | crash_mid_run | email | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 6.0 s | 6.0 s |
+| scripted:obedient | crash_mid_run | ticket | 1 | 100.0% (1/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 6.0 s | 6.0 s |
+| scripted:obedient | no_fault | checkout | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 0.0 s | 0.0 s |
+| scripted:obedient | no_fault | booking | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 0.0 s | 0.0 s |
+| scripted:obedient | no_fault | email | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 0.0 s | 0.0 s |
+| scripted:obedient | no_fault | ticket | 1 | 0.0% (0/1) | 0.0% (0/1) | 1 | 0.0% (0/1) | 0.0% (0/1) | 0.0 s | 0.0 s |
 
 ## Browser path
 
@@ -89,32 +91,32 @@ Runs per cell: 3.
 
 Totals: without the guard 36 duplicates, 12 of which are the known limitation connection_reset_after_commit, and 0 missing effects in 72 runs; with the guard 12 duplicates, 12 of which are the known limitation connection_reset_after_commit, and 0 missing effects in 72 runs.
 
-| Agent | Scenario | Target | Runs, guard off | Duplicate rate, guard off | Missing rate, guard off | Runs, guard on | Duplicate rate, guard on | Missing rate, guard on |
-|---|---|---|---|---|---|---|---|---|
-| scripted-browser:naive | no_fault | checkout | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | no_fault | booking | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | no_fault | email | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | no_fault | ticket | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | lost_response_after_commit | checkout | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | lost_response_after_commit | booking | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | lost_response_after_commit | email | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | lost_response_after_commit | ticket | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | slow_commit | checkout | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | slow_commit | booking | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | slow_commit | email | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | slow_commit | ticket | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | timeout_before_commit | checkout | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | timeout_before_commit | booking | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | timeout_before_commit | email | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | timeout_before_commit | ticket | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | stale_element | checkout | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | stale_element | booking | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | stale_element | email | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | stale_element | ticket | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) |
-| scripted-browser:naive | connection_reset_after_commit | checkout | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 100.0% (3/3) | 0.0% (0/3) |
-| scripted-browser:naive | connection_reset_after_commit | booking | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 100.0% (3/3) | 0.0% (0/3) |
-| scripted-browser:naive | connection_reset_after_commit | email | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 100.0% (3/3) | 0.0% (0/3) |
-| scripted-browser:naive | connection_reset_after_commit | ticket | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 100.0% (3/3) | 0.0% (0/3) |
+| Agent | Scenario | Target | Runs, guard off | Duplicate rate, guard off | Missing rate, guard off | Runs, guard on | Duplicate rate, guard on | Missing rate, guard on | Mean duration, guard off | Mean duration, guard on |
+|---|---|---|---|---|---|---|---|---|---|---|
+| scripted-browser:naive | no_fault | checkout | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 1.5 s | 1.5 s |
+| scripted-browser:naive | no_fault | booking | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 1.3 s | 1.4 s |
+| scripted-browser:naive | no_fault | email | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 1.4 s | 1.4 s |
+| scripted-browser:naive | no_fault | ticket | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 1.2 s | 1.5 s |
+| scripted-browser:naive | lost_response_after_commit | checkout | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 2.9 s | 2.5 s |
+| scripted-browser:naive | lost_response_after_commit | booking | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 2.9 s | 2.4 s |
+| scripted-browser:naive | lost_response_after_commit | email | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 2.8 s | 2.4 s |
+| scripted-browser:naive | lost_response_after_commit | ticket | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 2.8 s | 2.6 s |
+| scripted-browser:naive | slow_commit | checkout | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 2.8 s | 4.5 s |
+| scripted-browser:naive | slow_commit | booking | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 3.5 s | 4.5 s |
+| scripted-browser:naive | slow_commit | email | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 2.9 s | 4.5 s |
+| scripted-browser:naive | slow_commit | ticket | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 2.8 s | 4.5 s |
+| scripted-browser:naive | timeout_before_commit | checkout | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 2.8 s | 9.1 s |
+| scripted-browser:naive | timeout_before_commit | booking | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 2.9 s | 9.1 s |
+| scripted-browser:naive | timeout_before_commit | email | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 2.9 s | 9.1 s |
+| scripted-browser:naive | timeout_before_commit | ticket | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 2.8 s | 9.1 s |
+| scripted-browser:naive | stale_element | checkout | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 2.8 s | 9.1 s |
+| scripted-browser:naive | stale_element | booking | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 2.8 s | 9.6 s |
+| scripted-browser:naive | stale_element | email | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 2.9 s | 9.3 s |
+| scripted-browser:naive | stale_element | ticket | 3 | 0.0% (0/3) | 0.0% (0/3) | 3 | 0.0% (0/3) | 0.0% (0/3) | 2.8 s | 9.1 s |
+| scripted-browser:naive | connection_reset_after_commit | checkout | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 100.0% (3/3) | 0.0% (0/3) | 1.4 s | 1.3 s |
+| scripted-browser:naive | connection_reset_after_commit | booking | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 100.0% (3/3) | 0.0% (0/3) | 1.9 s | 1.3 s |
+| scripted-browser:naive | connection_reset_after_commit | email | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 100.0% (3/3) | 0.0% (0/3) | 1.3 s | 1.3 s |
+| scripted-browser:naive | connection_reset_after_commit | ticket | 3 | 100.0% (3/3) | 0.0% (0/3) | 3 | 100.0% (3/3) | 0.0% (0/3) | 1.2 s | 1.3 s |
 
 ## Known limitations
 
@@ -122,8 +124,8 @@ Totals: without the guard 36 duplicates, 12 of which are the known limitation co
 
 ## Not run
 
-- Claude via the Claude Agent SDK (claude-agent-sdk), API and browser paths: no API key in the environment; needs Hammed's approval (run `npm run bench:real -- --confirm-spend` with ANTHROPIC_API_KEY set)
-- OpenAI via the Chat Completions API (openai), API and browser paths: no API key in the environment; needs Hammed's approval (run `npm run bench:real -- --confirm-spend` with OPENAI_API_KEY set)
+- Claude via the Claude Agent SDK (claude-agent-sdk), API and browser paths: no API key in the environment; needs Hammed's approval (run `npm run bench:real -- --confirm-spend --max-spend-usd <dollars>` with ANTHROPIC_API_KEY set)
+- OpenAI via the Chat Completions API (openai), API and browser paths: no API key in the environment; needs Hammed's approval (run `npm run bench:real -- --confirm-spend --max-spend-usd <dollars>` with OPENAI_API_KEY, AGENT_ONCE_OPENAI_MODEL, AGENT_ONCE_OPENAI_INPUT_USD_PER_MTOK, AGENT_ONCE_OPENAI_OUTPUT_USD_PER_MTOK set)
 - crash_mid_run on the browser path: there is no crash harness for the browser path in this release; it is measured on the API path only.
 - Postgres and Redis ledgers: not part of v1, so not measured. Every overhead number above is SQLite.
 
@@ -144,15 +146,15 @@ Cost estimate: to be filled in before approval. Token-usage assumptions for that
 
 Every guarded run that duplicated or lost an effect, and every run whose agent failed. Unguarded duplicates are the problem the guard exists to stop and are reported in the tables above, not here.
 
-- duplicate: browser path, scripted-browser:naive, connection_reset_after_commit, checkout, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
-- duplicate: browser path, scripted-browser:naive, connection_reset_after_commit, checkout, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
-- duplicate: browser path, scripted-browser:naive, connection_reset_after_commit, checkout, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
-- duplicate: browser path, scripted-browser:naive, connection_reset_after_commit, booking, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
-- duplicate: browser path, scripted-browser:naive, connection_reset_after_commit, booking, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
-- duplicate: browser path, scripted-browser:naive, connection_reset_after_commit, booking, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
-- duplicate: browser path, scripted-browser:naive, connection_reset_after_commit, email, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
-- duplicate: browser path, scripted-browser:naive, connection_reset_after_commit, email, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
-- duplicate: browser path, scripted-browser:naive, connection_reset_after_commit, email, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
-- duplicate: browser path, scripted-browser:naive, connection_reset_after_commit, ticket, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
-- duplicate: browser path, scripted-browser:naive, connection_reset_after_commit, ticket, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
-- duplicate: browser path, scripted-browser:naive, connection_reset_after_commit, ticket, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
+- duplicate: browser path, scripted-browser:naive, guard on, connection_reset_after_commit, checkout, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
+- duplicate: browser path, scripted-browser:naive, guard on, connection_reset_after_commit, checkout, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
+- duplicate: browser path, scripted-browser:naive, guard on, connection_reset_after_commit, checkout, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
+- duplicate: browser path, scripted-browser:naive, guard on, connection_reset_after_commit, booking, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
+- duplicate: browser path, scripted-browser:naive, guard on, connection_reset_after_commit, booking, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
+- duplicate: browser path, scripted-browser:naive, guard on, connection_reset_after_commit, booking, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
+- duplicate: browser path, scripted-browser:naive, guard on, connection_reset_after_commit, email, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
+- duplicate: browser path, scripted-browser:naive, guard on, connection_reset_after_commit, email, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
+- duplicate: browser path, scripted-browser:naive, guard on, connection_reset_after_commit, email, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
+- duplicate: browser path, scripted-browser:naive, guard on, connection_reset_after_commit, ticket, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
+- duplicate: browser path, scripted-browser:naive, guard on, connection_reset_after_commit, ticket, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)
+- duplicate: browser path, scripted-browser:naive, guard on, connection_reset_after_commit, ticket, 2 effects (known limitation: Chromium re-sends the POST below the MCP layer when the connection resets after the commit, so the server sees two submissions from one click)

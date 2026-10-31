@@ -4,9 +4,10 @@ import type { BenchRecord } from '../src/matrix.js';
 import { renderResults, type ResultsInput } from '../src/results-md.js';
 
 const LATENCY: LatencyReport = {
-  core: { p50Ms: 0.213, p99Ms: 0.912, meanMs: 0.301 },
-  proxy: { p50Ms: 0.481, p99Ms: 1.734, meanMs: 0.552 },
-  python: { p50Ms: 0.377, p99Ms: 1.204, meanMs: 0.418 },
+  core: { p50Ms: 0.213, p99Ms: 0.912, meanMs: 0.301, overThreshold: 97 },
+  proxy: { p50Ms: 0.481, p99Ms: 1.734, meanMs: 0.552, overThreshold: 120 },
+  python: { p50Ms: 0.377, p99Ms: 1.204, meanMs: 0.418, overThreshold: 88 },
+  tail: { thresholdMs: 1, probe: { defaultCheckpoint: [97, 102, 99], noAutocheckpoint: [58, 16, 11], memoryLedger: [10, 0, 2], samples: 5_000 } },
   iterations: 5_000,
   warmup: 500,
   machine: { node: 'v22.23.4', cpu: 'Test CPU (8 cores)', os: 'darwin 25.6.0 arm64', sqlite: '3.53.4', python: '3.12.9' },
@@ -64,9 +65,9 @@ describe('renderResults', () => {
     const markdown = renderResults(input());
     expect(markdown).toContain('npm run bench && npm run bench:browser');
     const overhead = section(markdown, 'Guard overhead');
-    expect(overhead).toMatch(/\| Core: Guard\.run on SQLite WAL \| 0\.213 \| 0\.912 \| 0\.301 \| 5000 \|/);
-    expect(overhead).toMatch(/\| Proxy: guarded tools\/call through the in-process MCP proxy \| 0\.481 \| 1\.734 \| 0\.552 \| 5000 \|/);
-    expect(overhead).toMatch(/\| Python: Guard\.run on sqlite3 WAL \| 0\.377 \| 1\.204 \| 0\.418 \| 5000 \|/);
+    expect(overhead).toMatch(/\| Core: Guard\.run on SQLite WAL \| 0\.213 \| 0\.912 \| 0\.301 \| 1\.9% \(97\/5000\) \| 5000 \|/);
+    expect(overhead).toMatch(/\| Proxy: guarded tools\/call through the in-process MCP proxy \| 0\.481 \| 1\.734 \| 0\.552 \| 2\.4% \(120\/5000\) \| 5000 \|/);
+    expect(overhead).toMatch(/\| Python: Guard\.run on sqlite3 WAL \| 0\.377 \| 1\.204 \| 0\.418 \| 1\.8% \(88\/5000\) \| 5000 \|/);
     expect(overhead).toContain('under 5 ms');
     expect(overhead).toContain('Met: yes');
     expect(overhead).toContain('Test CPU (8 cores)');
@@ -85,8 +86,8 @@ describe('renderResults', () => {
     const duplicate = record({ path: 'browser', agent: 'scripted-browser:naive', scenario: 'timeout_before_commit', target: 'ticket', effects: 2, duplicate: true });
     const missing = record({ scenario: 'crash_mid_run', target: 'email', effects: 0, missing: true });
     const failures = section(renderResults(input({ records: [...RECORDS, duplicate, missing] })), 'Failures');
-    expect(failures).toContain('duplicate: browser path, scripted-browser:naive, timeout_before_commit, ticket, 2 effects');
-    expect(failures).toContain('missing: API path, scripted:naive, crash_mid_run, email, 0 effects');
+    expect(failures).toContain('duplicate: browser path, scripted-browser:naive, guard on, timeout_before_commit, ticket, 2 effects');
+    expect(failures).toContain('missing: API path, scripted:naive, guard on, crash_mid_run, email, 0 effects');
     expect(failures).not.toContain('None');
   });
 
@@ -95,14 +96,14 @@ describe('renderResults', () => {
       record({ path: 'browser', agent: 'scripted-browser:naive', scenario: 'connection_reset_after_commit', guard, effects: 2, duplicate: true }),
     );
     const markdown = renderResults(input({ records: [...RECORDS, ...reset] }));
-    expect(section(markdown, 'Failures')).toMatch(/duplicate: browser path, scripted-browser:naive, connection_reset_after_commit, checkout, 2 effects \(known limitation: Chromium re-sends the POST below the MCP layer/);
+    expect(section(markdown, 'Failures')).toMatch(/duplicate: browser path, scripted-browser:naive, guard on, connection_reset_after_commit, checkout, 2 effects \(known limitation: Chromium re-sends the POST below the MCP layer/);
     expect(section(markdown, 'Known limitations')).toContain('connection_reset_after_commit');
     expect(section(markdown, 'Browser path')).toContain('with the guard 1 duplicate, 1 of which is the known limitation connection_reset_after_commit, and 0 missing effects in 3 runs');
   });
 
   test('nothing unmeasured is given a number', () => {
     const markdown = renderResults(input({ latency: { ...LATENCY, python: null, machine: { ...LATENCY.machine, python: null } }, records: RECORDS.filter((row) => row.path === 'api') }));
-    expect(section(markdown, 'Guard overhead')).toMatch(/\| Python: Guard\.run on sqlite3 WAL \| not measured \| not measured \| not measured \| not measured \|/);
+    expect(section(markdown, 'Guard overhead')).toMatch(/\| Python: Guard\.run on sqlite3 WAL \| not measured \| not measured \| not measured \| not measured \| not measured \|/);
     expect(section(markdown, 'Browser path')).toContain('Not run in this results file');
     expect(renderResults(input({ latency: null }))).toContain('Guard overhead was not measured');
   });
@@ -124,5 +125,41 @@ describe('renderResults', () => {
     expect(section(markdown, 'API path')).not.toContain('claude-agent-sdk');
     expect(section(markdown, 'Real-model runs')).toMatch(/\| claude-agent-sdk \| lost_response_after_commit \| checkout \| 1 \| 0\.0% \(0\/1\) \| 0\.0% \(0\/1\) \| 1 \| 0\.0% \(0\/1\) \| 0\.0% \(0\/1\) \|/);
     expect(section(markdown, 'Not run')).toMatch(/API tool calls per run: mean 1\.5, max 2 \(scripted agents\)/);
+  });
+
+  test('the overhead tail is counted per row and attributed only as far as the probe measured', () => {
+    const overhead = section(renderResults(input()), 'Guard overhead');
+    expect(overhead).toMatch(/\| Core: Guard\.run on SQLite WAL \| 0\.213 \| 0\.912 \| 0\.301 \| 1\.9% \(97\/5000\) \| 5000 \|/);
+    expect(overhead).toContain('Tail probe, core only, 3 interleaved repeats of 5000 guarded calls per mode, calls over 1 ms: default WAL auto-checkpoint 97, 102, 99; wal_autocheckpoint = 0: 58, 16, 11; in-memory ledger: 10, 0, 2.');
+    expect(overhead).toContain('In every repeat turning off WAL auto-checkpoint left fewer slow calls (at most 58, against at least 97), so that difference is attributed to WAL auto-checkpoint. The slow calls that remain with it off are not attributed to a cause.');
+    const unexplained = renderResults(input({ latency: { ...LATENCY, tail: { thresholdMs: 1, probe: { defaultCheckpoint: [50, 30, 61], noAutocheckpoint: [40, 52, 12], memoryLedger: [0, 0, 0], samples: 5_000 } } } }));
+    expect(section(unexplained, 'Guard overhead')).toContain('The repeats overlap, so no cause is given for the tail.');
+    expect(unexplained).not.toContain('attributed to WAL auto-checkpoint');
+  });
+
+  test('each cell shows its mean duration with and without the guard', () => {
+    const stale = [
+      record({ path: 'browser', agent: 'scripted-browser:naive', scenario: 'stale_element', guard: false, durationMs: 2_800 }),
+      record({ path: 'browser', agent: 'scripted-browser:naive', scenario: 'stale_element', durationMs: 9_100 }),
+      record({ path: 'browser', agent: 'scripted-browser:naive', scenario: 'stale_element', durationMs: 9_300 }),
+    ];
+    expect(section(renderResults(input({ records: [...RECORDS, ...stale] })), 'Browser path')).toMatch(/\| stale_element \| checkout \| 1 \| 0\.0% \(0\/1\) \| 0\.0% \(0\/1\) \| 2 \| 0\.0% \(0\/2\) \| 0\.0% \(0\/2\) \| 2\.8 s \| 9\.2 s \|/);
+  });
+
+  test('real-model rows show the recorded spend and the spend limit', () => {
+    const spent = (guard: boolean, costUsd: number | null): BenchRecord =>
+      record({ agent: 'claude-agent-sdk', guard, agentCalls: null, blockedOrDoubt: null, spend: { inputTokens: 6_000, outputTokens: 400, costUsd } });
+    const markdown = renderResults(input({ records: [...RECORDS, spent(false, 0.021), spent(true, 0.0213)], realSpend: { limitUsd: 5, stoppedAtLimit: false } }));
+    const real = section(markdown, 'Real-model runs');
+    expect(real).toContain('Recorded spend, all stored real-model runs: $0.0423 over 2 runs (12000 input and 800 output tokens). Spend limit of the latest bench:real run: $5.00; the limit did not stop any run.');
+    expect(real).toMatch(/\| claude-agent-sdk \| lost_response_after_commit \| checkout \| .* \| \$0\.0210 \| \$0\.0213 \|/);
+    const unpriced = renderResults(input({ records: [...RECORDS, spent(true, null)], realSpend: { limitUsd: 5, stoppedAtLimit: true } }));
+    expect(section(unpriced, 'Real-model runs')).toContain('1 run did not report a cost');
+    expect(section(unpriced, 'Real-model runs')).toContain('stopped launching runs at the limit');
+  });
+
+  test('a cell with unpriced runs says how many of its runs the spend covers', () => {
+    const runs = [0.01, null, null].map((costUsd) => record({ agent: 'openai', spend: { inputTokens: 100, outputTokens: 10, costUsd } }));
+    expect(section(renderResults(input({ records: [...RECORDS, ...runs] })), 'Real-model runs')).toMatch(/\| \$0\.0100 \(1 of 3 runs priced\) \|/);
   });
 });

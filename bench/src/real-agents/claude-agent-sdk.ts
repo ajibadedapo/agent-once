@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import type { Options, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { agentTask, type RealAgent } from './agent-env.js';
+import { agentTask, MAX_RUN_USD_ENV, positiveNumberEnv, recordUsage, type RealAgent } from './agent-env.js';
 
 export const CLAUDE_AGENT_NAME = 'claude-agent-sdk';
 export const CLAUDE_KEY_ENV = 'ANTHROPIC_API_KEY';
@@ -16,13 +16,15 @@ export interface ClaudeRunDeps {
 }
 
 export function claudeAgentSdkAgent(): RealAgent {
-  return { name: CLAUDE_AGENT_NAME, keyEnv: CLAUDE_KEY_ENV, external: [process.execPath, fileURLToPath(import.meta.url)] };
+  return { name: CLAUDE_AGENT_NAME, keyEnv: CLAUDE_KEY_ENV, requiredEnv: [], external: [process.execPath, fileURLToPath(import.meta.url)] };
 }
 
 export async function runClaudeAgent(deps: ClaudeRunDeps): Promise<void> {
   const task = agentTask(CLAUDE_AGENT_NAME, CLAUDE_KEY_ENV, deps.env);
+  const maxBudgetUsd = positiveNumberEnv(deps.env, MAX_RUN_USD_ENV, CLAUDE_AGENT_NAME);
   const model = deps.env.AGENT_ONCE_CLAUDE_MODEL;
   const options: Options = {
+    maxBudgetUsd,
     mcpServers: { [SERVER_NAME]: { type: 'stdio', command: task.command, args: task.args, env: task.serverEnv } },
     strictMcpConfig: true,
     settingSources: [],
@@ -34,7 +36,14 @@ export async function runClaudeAgent(deps: ClaudeRunDeps): Promise<void> {
   };
   for await (const message of deps.query({ prompt: task.task, options })) {
     if (message.type !== 'result') continue;
-    process.stdout.write(`${JSON.stringify({ agent: CLAUDE_AGENT_NAME, subtype: message.subtype, turns: message.num_turns, usage: message.modelUsage, costUsd: message.total_cost_usd })}\n`);
+    const usage = Object.values(message.modelUsage);
+    recordUsage(deps.env, {
+      agent: CLAUDE_AGENT_NAME,
+      model: Object.keys(message.modelUsage).join(','),
+      inputTokens: usage.reduce((sum, entry) => sum + entry.inputTokens + entry.cacheReadInputTokens + entry.cacheCreationInputTokens, 0),
+      outputTokens: usage.reduce((sum, entry) => sum + entry.outputTokens, 0),
+      costUsd: message.total_cost_usd,
+    });
     if (message.is_error) throw new Error(`${CLAUDE_AGENT_NAME} ended with ${message.subtype}`);
   }
 }

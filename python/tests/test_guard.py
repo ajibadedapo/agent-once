@@ -123,6 +123,18 @@ def test_records_the_captured_value_on_intended_and_sent() -> None:
     ]
 
 
+def test_a_failed_outcome_repeats_the_captured_value() -> None:
+    s = setup()
+    result = s.guard.run(guarded_call(captured="ORD-1001"), Scripted(TRANSPORT).execute)
+    assert s.ledger.last().detail == {
+        "captured": "ORD-1001",
+        "failure_kind": "transport_error",
+        "error": "upstream closed the connection",
+        "result": None,
+        "idempotency_key": result.action_id,
+    }
+
+
 def test_store_args_false_keeps_args_out_of_the_ledger() -> None:
     s = setup(store_args=False)
     s.guard.run(guarded_call(), Scripted(OK).execute)

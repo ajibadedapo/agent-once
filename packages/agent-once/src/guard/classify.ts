@@ -13,6 +13,8 @@ export const DEFAULT_SIDE_EFFECT_PATTERNS: readonly string[] = Object.freeze([
   'order',
   'purchase',
   'place',
+  'create',
+  'post',
 ]);
 
 export const DEFAULT_MONEY_PATTERNS: readonly string[] = Object.freeze([

@@ -22,6 +22,7 @@ import {
   callFailedResult,
   ledgerUnavailableResult,
   replayedResult,
+  retryByAgentResult,
   unidentifiableCallResult,
   upstreamExitedResult,
   withStatus,
@@ -43,8 +44,12 @@ export interface ProxyExtension {
   onClientRequest?(msg: JSONRPCRequest, ctx: ProxyContext): void;
   onUpstreamResult?(tool: string, args: Record<string, unknown>, result: CallToolResult, ctx: ProxyContext): void;
   adjustCall?(call: GuardedCall, ctx: ProxyContext): GuardedCall;
-  onDispatch?(call: GuardedCall, actionId: string, ctx: ProxyContext): void;
-  classifyOutcome?(tool: string, result: CallToolResult): ToolOutcome | undefined;
+  classifyOutcome?(
+    tool: string,
+    args: Record<string, unknown>,
+    result: CallToolResult,
+    ctx: ProxyContext,
+  ): ToolOutcome | undefined | Promise<ToolOutcome | undefined>;
   reconcilerFor?(tool: string, args: Record<string, unknown>, ctx: ProxyContext): Reconciler | undefined;
 }
 
@@ -392,7 +397,6 @@ class McpProxy implements RunningProxy {
 
   private async dispatch(entry: GuardedRequest, call: GuardedCall, params: Params, context: ExecuteContext): Promise<ToolOutcome> {
     entry.actionId = context.actionId;
-    if (context.actionId !== undefined) this.notifyDispatch(call, context.actionId);
     if (this.upstreamClosed) return { kind: 'not_dispatched', error: 'the MCP server is not running' };
     const id = this.upstreamRequests.nextId();
     const response = this.upstreamRequests.expectOrAbandon(id);
@@ -409,10 +413,10 @@ class McpProxy implements RunningProxy {
     if (reply.kind === 'error') return { kind: 'error_result', result: { error: reply.error } as unknown as JsonValue };
     const result = reply.result as CallToolResult;
     this.notifyResult(call.tool, call.args, result);
-    return this.classify(call.tool, result);
+    return this.classify(call.tool, call.args, result);
   }
 
-  private classify(tool: string, result: CallToolResult): ToolOutcome {
+  private async classify(tool: string, args: Params, result: CallToolResult): Promise<ToolOutcome> {
     const isError = result.isError === true;
     if (isError) {
       const text = resultText(result);
@@ -420,7 +424,7 @@ class McpProxy implements RunningProxy {
       if (patterns.some((pattern) => this.regex(pattern).test(text))) return { kind: 'not_dispatched', error: text };
     }
     for (const extension of this.extensions) {
-      const outcome = extension.classifyOutcome?.(tool, result);
+      const outcome = await extension.classifyOutcome?.(tool, args, result, this.context);
       if (outcome !== undefined) return outcome;
     }
     return isError ? { kind: 'error_result', result: result as JsonValue } : { kind: 'ok', result: result as JsonValue };
@@ -448,6 +452,8 @@ class McpProxy implements RunningProxy {
         return { kind: 'result', result: blockedToolResult(result.doubt) };
       case 'ledger_unavailable':
         return { kind: 'result', result: ledgerUnavailableResult(result.error) };
+      case 'retry_by_agent':
+        return { kind: 'result', result: retryByAgentResult(call.tool, result.actionId) };
     }
   }
 
@@ -547,16 +553,6 @@ class McpProxy implements RunningProxy {
       return result;
     }
     return { ...result, tools: [...(result.tools as unknown[]), RESOLVE_TOOL] };
-  }
-
-  private notifyDispatch(call: GuardedCall, actionId: string): void {
-    for (const extension of this.extensions) {
-      try {
-        extension.onDispatch?.(call, actionId, this.context);
-      } catch (error) {
-        this.log(`agent-once: an extension failed before dispatching ${call.tool}: ${errorMessage(error)}`);
-      }
-    }
   }
 
   private notifyResult(tool: string, args: Params, result: CallToolResult): void {

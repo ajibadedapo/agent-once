@@ -18,6 +18,8 @@ DEFAULT_SIDE_EFFECT_PATTERNS: tuple[str, ...] = (
     "order",
     "purchase",
     "place",
+    "create",
+    "post",
 )
 
 DEFAULT_MONEY_PATTERNS: tuple[str, ...] = (

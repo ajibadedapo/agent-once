@@ -34,6 +34,8 @@ def test_the_default_pattern_lists_are_the_agreed_words() -> None:
         "order",
         "purchase",
         "place",
+        "create",
+        "post",
     ]
     assert list(DEFAULT_MONEY_PATTERNS) == [
         "pay",

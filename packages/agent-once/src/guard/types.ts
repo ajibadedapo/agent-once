@@ -9,7 +9,10 @@ export type ToolOutcome =
   | { kind: 'not_dispatched'; error: string }
   | { kind: 'abandoned' };
 
-export type ReconcileOutcome = { outcome: 'happened'; result?: JsonValue } | { outcome: 'not_happened' } | { outcome: 'unknown'; reason: string };
+export type ReconcileOutcome =
+  | { outcome: 'happened'; result?: JsonValue }
+  | { outcome: 'not_happened'; retryByAgent?: true }
+  | { outcome: 'unknown'; reason: string };
 
 export interface ReconcileContext {
   tool: string;
@@ -62,6 +65,7 @@ export type GuardResult =
   | { status: 'executed' | 'passed'; actionId?: string; outcome: ToolOutcome; recorded?: false }
   | { status: 'replayed'; actionId: string; result: JsonValue | null; resultTruncated: boolean; reason: string }
   | { status: 'in_doubt' | 'blocked'; doubt: DoubtInfo }
+  | { status: 'retry_by_agent'; actionId: string }
   | { status: 'ledger_unavailable'; error: string };
 
 export type ResolvedBy = 'agent' | 'human' | 'webhook';

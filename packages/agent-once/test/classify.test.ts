@@ -24,6 +24,8 @@ describe('classifyTool', () => {
       'order',
       'purchase',
       'place',
+      'create',
+      'post',
     ]);
     expect(DEFAULT_MONEY_PATTERNS).toEqual(['pay', 'buy', 'checkout', 'purchase', 'charge', 'order', 'payment', 'transfer']);
     expect(DEFAULT_IRREVERSIBLE_PATTERNS).toEqual(['delete', 'publish', 'send', 'deploy']);

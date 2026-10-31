@@ -624,6 +624,7 @@ class Guard:
         if outcome.kind == "error_result":
             stored = stored_result_detail(outcome.result, self._max_result_bytes)
             detail: dict[str, JsonValue] = {
+                **_captured_detail(call),
                 "failure_kind": "error_result",
                 "error": ERROR_RESULT_MESSAGE,
                 "result": stored["result"],
@@ -633,6 +634,7 @@ class Guard:
             detail["idempotency_key"] = key
             return detail
         return {
+            **_captured_detail(call),
             "failure_kind": outcome.kind,
             "error": outcome.error,
             "result": None,

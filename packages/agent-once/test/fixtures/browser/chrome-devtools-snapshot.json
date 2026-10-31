@@ -2,7 +2,7 @@
   "content": [
     {
       "type": "text",
-      "text": "## Latest page snapshot\nuid=1_0 RootWebArea \"Checkout\" url=\"http://127.0.0.1:55104/checkout?session=abc#top\"\n  uid=1_1 heading \"Checkout\" level=\"1\"\n  uid=1_2 \"Order reference: AO-48213\"\n  uid=1_3 \"Total: 42.00 GBP\"\n  uid=1_4 form\n    uid=1_5 button \"Place order\"\n  uid=1_6 link \"Next page\" url=\"http://127.0.0.1:55104/checkout?page=2\"\n  uid=1_8 form\n    uid=1_9 button \"Pay now\"\n"
+      "text": "## Latest page snapshot\nuid=1_0 RootWebArea \"Checkout\" url=\"http://127.0.0.1:62888/checkout?session=abc#top\"\n  uid=1_1 heading \"Checkout\" level=\"1\"\n  uid=1_2 \"Order reference: AO-48213\"\n  uid=1_3 \"Total: 42.00 GBP\"\n  uid=1_4 form\n    uid=1_5 button \"Place order\"\n  uid=1_6 link \"Next page\" url=\"http://127.0.0.1:62888/checkout?page=2\"\n  uid=1_8 form\n    uid=1_9 button \"Pay now\"\n"
     }
   ]
 }

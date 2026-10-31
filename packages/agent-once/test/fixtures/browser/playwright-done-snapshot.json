@@ -1,0 +1,8 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "### Page\n- Page URL: http://127.0.0.1:62881/done?\n- Page Title: Order placed\n### Snapshot\n```yaml\n- generic [active] [ref=f1e1]:\n  - heading \"Thank you for your order\" [level=1] [ref=f1e2]\n  - paragraph [ref=f1e3]: Order number AO-48213 confirmed.\n```"
+    }
+  ]
+}

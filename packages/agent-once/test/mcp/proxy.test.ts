@@ -400,7 +400,7 @@ describe('extensions', () => {
             results.push(`${tool}:${textOf(result)}`);
           },
           adjustCall: (call: GuardedCall) => (call.tool === 'read_count' ? { ...call, policy: 'guard' } : call),
-          classifyOutcome: (tool) => (tool === 'read_count' ? { kind: 'not_dispatched', error: 'classified by extension' } : undefined),
+          classifyOutcome: (tool: string) => (tool === 'read_count' ? { kind: 'not_dispatched', error: 'classified by extension' } : undefined),
         },
       ],
     });

@@ -1,6 +1,7 @@
 import type { BrowserConfig } from '../../config/schema.js';
 import { classifyTool, matchesAnyPattern } from '../../guard/classify.js';
 import type { GuardPolicy, ToolClass } from '../../ledger/types.js';
+import { compiled } from './compiled.js';
 import { normalizePageUrl, type PageState } from './page-state.js';
 import type { BrowserProfile } from './profile.js';
 
@@ -12,28 +13,45 @@ export interface BrowserCallRule {
 }
 
 type Args = Record<string, unknown>;
-type SideEffectCheck = (args: Args) => boolean;
+type SideEffectKind = 'element' | 'keyboard';
 
-const ALWAYS: SideEffectCheck = () => true;
-const PRESSES_ENTER: SideEffectCheck = (args) => args.key === 'Enter';
+interface SideEffectTool {
+  kind: SideEffectKind;
+  applies(args: Args): boolean;
+}
 
-const SIDE_EFFECT_TOOLS: Readonly<Record<BrowserProfile, ReadonlyMap<string, SideEffectCheck>>> = {
+const ENTER_KEYS: ReadonlySet<unknown> = new Set(['Enter', 'NumpadEnter']);
+const ALWAYS = (): boolean => true;
+const element: SideEffectTool = { kind: 'element', applies: ALWAYS };
+const pressesEnter: SideEffectTool = { kind: 'keyboard', applies: (args) => ENTER_KEYS.has(args.key) };
+
+const SIDE_EFFECT_TOOLS: Readonly<Record<BrowserProfile, ReadonlyMap<string, SideEffectTool>>> = {
   playwright: new Map([
-    ['browser_click', ALWAYS],
-    ['browser_type', (args) => args.submit === true],
-    ['browser_press_key', PRESSES_ENTER],
-    ['browser_select_option', ALWAYS],
-    ['browser_file_upload', ALWAYS],
-    ['browser_drop', ALWAYS],
+    ['browser_click', element],
+    ['browser_type', { kind: 'keyboard', applies: (args) => args.submit === true }],
+    ['browser_press_key', pressesEnter],
+    ['browser_select_option', element],
+    ['browser_file_upload', element],
+    ['browser_drop', element],
   ]),
   'chrome-devtools': new Map([
-    ['click', ALWAYS],
-    ['type_text', (args) => typeof args.submitKey === 'string' && args.submitKey !== ''],
-    ['press_key', PRESSES_ENTER],
-    ['upload_file', ALWAYS],
-    ['drag', ALWAYS],
+    ['click', element],
+    ['type_text', { kind: 'keyboard', applies: (args) => ENTER_KEYS.has(args.submitKey) }],
+    ['press_key', pressesEnter],
+    ['upload_file', element],
+    ['drag', element],
   ]),
 };
+
+const PAGE_TOOLS: Readonly<Record<BrowserProfile, ReadonlySet<string>>> = {
+  playwright: new Set(['browser_navigate', 'browser_navigate_back', 'browser_tabs', 'browser_snapshot']),
+  'chrome-devtools': new Set(['navigate_page', 'new_page', 'select_page', 'list_pages', 'take_snapshot']),
+};
+
+export const SNAPSHOT_TOOL: Readonly<Record<BrowserProfile, string>> = { playwright: 'browser_snapshot', 'chrome-devtools': 'take_snapshot' };
+export const NAVIGATE_TOOL: Readonly<Record<BrowserProfile, string>> = { playwright: 'browser_navigate', 'chrome-devtools': 'navigate_page' };
+const NAVIGATION_TOOLS: ReadonlySet<string> = new Set(['browser_navigate', 'browser_navigate_back', 'browser_tabs', 'navigate_page', 'new_page', 'select_page']);
+const PLAYWRIGHT_REF = /^(?:f\d+)?e\d+$/;
 
 const PASSING_TOOLS: Readonly<Record<BrowserProfile, ReadonlySet<string>>> = {
   playwright: new Set([
@@ -100,6 +118,18 @@ export function isSideEffectTool(profile: BrowserProfile, tool: string): boolean
   return SIDE_EFFECT_TOOLS[profile].has(tool);
 }
 
+export function isSideEffectCall(profile: BrowserProfile, tool: string, args: Args): boolean {
+  return SIDE_EFFECT_TOOLS[profile].get(tool)?.applies(args) === true;
+}
+
+export function observesPage(profile: BrowserProfile, tool: string): boolean {
+  return PAGE_TOOLS[profile].has(tool) || SIDE_EFFECT_TOOLS[profile].has(tool);
+}
+
+export function isNavigationTool(tool: string): boolean {
+  return NAVIGATION_TOOLS.has(tool);
+}
+
 export function profileForTool(tool: string): BrowserProfile | undefined {
   return (['playwright', 'chrome-devtools'] as const).find((profile) => isKnownBrowserTool(profile, tool));
 }
@@ -108,19 +138,33 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
-function resolveLabel(profile: BrowserProfile, args: Args, page: PageState): string {
+function snapshotLabel(profile: BrowserProfile, args: Args, page: PageState): { label?: string; unresolvedRef: boolean } {
+  let unresolvedRef = false;
   for (const key of ELEMENT_KEYS[profile]) {
     const ref = args[key];
-    const label = typeof ref === 'string' ? page.labelFor(ref) : undefined;
-    if (label !== undefined) return label;
+    if (typeof ref !== 'string' || ref === '') continue;
+    const label = page.labelFor(ref);
+    if (label !== undefined) return { label, unresolvedRef: false };
+    unresolvedRef = true;
   }
-  return text(args.element);
+  return { unresolvedRef };
 }
 
-function capture(cfg: BrowserConfig, url: string, page: PageState): string | undefined {
-  for (const rule of cfg.capture) {
-    if (!new RegExp(rule.urlPattern, 'i').test(url)) continue;
-    const match = new RegExp(rule.regex, 'm').exec(page.lastText());
+function resolveLabel(profile: BrowserProfile, args: Args, page: PageState): string {
+  const found = snapshotLabel(profile, args, page).label;
+  if (found !== undefined) return found;
+  const description = text(args.element);
+  if (description !== '') return description;
+  const target = text(args.target);
+  return profile === 'playwright' && target !== '' && !PLAYWRIGHT_REF.test(target) ? target : '';
+}
+
+function capture(cfg: BrowserConfig, page: PageState): string | undefined {
+  const url = page.url();
+  if (url === undefined || !page.snapshotIsCurrent()) return undefined;
+  for (const rule of compiled(cfg).capture) {
+    if (!rule.url.test(url)) continue;
+    const match = rule.regex.exec(page.lastText());
     if (match !== null) return match[1] ?? match[0];
   }
   return undefined;
@@ -131,18 +175,30 @@ export function browserIdentity(profile: BrowserProfile, args: Args, page: PageS
   return { page_url: url === undefined ? '' : normalizePageUrl(url), label: resolveLabel(profile, args, page) };
 }
 
-export function browserCallRule(profile: BrowserProfile, tool: string, args: Args, page: PageState, cfg: BrowserConfig): BrowserCallRule {
-  const isSideEffect = SIDE_EFFECT_TOOLS[profile].get(tool);
-  if (isSideEffect === undefined || !isSideEffect(args)) return { policy: 'pass', toolClass: 'standard' };
-  const identity = browserIdentity(profile, args, page);
-  const subject = [identity.label, text(args.element), identity.page_url].join(' ');
-  if (!matchesAnyPattern('', subject, cfg.sideEffectPatterns)) return { policy: 'pass', toolClass: 'standard' };
-  const toolClass = classifyTool('', subject, { money: cfg.moneyPatterns, irreversible: cfg.irreversiblePatterns });
-  const captured = capture(cfg, page.url() ?? '', page);
+function sideEffectTexts(tool: SideEffectTool, args: Args, page: PageState, identity: { page_url: string; label: string }): string[] {
+  if (tool.kind === 'keyboard') return [identity.page_url, page.title() ?? '', ...page.actionLabels()];
+  const described = [identity.label, text(args.element)].filter((value) => value !== '');
+  return described.length > 0 ? described : [identity.page_url];
+}
+
+function guarded(toolClass: ToolClass, identity: { page_url: string; label: string }, captured: string | undefined): BrowserCallRule {
   return {
     policy: toolClass === 'standard' ? 'guard' : 'block-on-doubt',
     toolClass,
     extraIdentity: identity,
     ...(captured === undefined ? {} : { captured }),
   };
+}
+
+export function browserCallRule(profile: BrowserProfile, tool: string, args: Args, page: PageState, cfg: BrowserConfig): BrowserCallRule {
+  const sideEffect = SIDE_EFFECT_TOOLS[profile].get(tool);
+  if (sideEffect === undefined || !sideEffect.applies(args)) return { policy: 'pass', toolClass: 'standard' };
+  const identity = browserIdentity(profile, args, page);
+  const captured = capture(cfg, page);
+  if (profile === 'chrome-devtools' && sideEffect.kind === 'element' && snapshotLabel(profile, args, page).unresolvedRef) {
+    return guarded('standard', identity, captured);
+  }
+  const matching = sideEffectTexts(sideEffect, args, page, identity).filter((value) => matchesAnyPattern('', value, cfg.sideEffectPatterns));
+  if (matching.length === 0) return { policy: 'pass', toolClass: 'standard' };
+  return guarded(classifyTool('', matching.join(' '), { money: cfg.moneyPatterns, irreversible: cfg.irreversiblePatterns }), identity, captured);
 }

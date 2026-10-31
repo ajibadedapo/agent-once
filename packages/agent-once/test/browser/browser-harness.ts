@@ -109,9 +109,19 @@ export interface BrowserProxy {
   close(): Promise<void>;
 }
 
-export async function startBrowserProxy(options: { info: Implementation; tools: Tool[]; config?: AgentOnceConfig; command?: string[] }): Promise<BrowserProxy> {
-  const clock = new ManualClock(START_MS);
-  const store = new RecordingStore(clock);
+export interface BrowserProxyOptions {
+  info: Implementation;
+  tools: Tool[];
+  config?: AgentOnceConfig;
+  command?: string[];
+  store?: RecordingStore;
+  clock?: ManualClock;
+  runInstance?: string;
+}
+
+export async function startBrowserProxy(options: BrowserProxyOptions): Promise<BrowserProxy> {
+  const clock = options.clock ?? new ManualClock(START_MS);
+  const store = options.store ?? new RecordingStore(clock);
   const config = options.config ?? configFrom();
   const server = new ReplayServer(options.info, options.tools);
   const [upstreamSide, serverSide] = InMemoryTransport.createLinkedPair();
@@ -125,7 +135,7 @@ export async function startBrowserProxy(options: { info: Implementation; tools: 
       new Guard({
         store,
         clock,
-        runInstance: 'run-1',
+        runInstance: options.runInstance ?? 'run-1',
         evidence: { emit: () => {} },
         retryWindowMs: config.ledger.retryWindowSeconds * 1000,
         settleWindowMs: config.ledger.settleSeconds * 1000,

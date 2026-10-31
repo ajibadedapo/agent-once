@@ -8,7 +8,6 @@ import { findToolRule } from './tool-policy.js';
 
 export interface ReadBackOptions {
   origin?: string;
-  capturedFor?: (actionId: string) => string | undefined;
 }
 
 type UpstreamCaller = Pick<ProxyContext, 'callUpstreamTool'>;
@@ -17,9 +16,9 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function capturedOf(ctx: ReconcileContext, options: ReadBackOptions): string | undefined {
+function capturedOf(ctx: ReconcileContext): string | undefined {
   const recorded = ctx.event.detail.captured;
-  return typeof recorded === 'string' ? recorded : options.capturedFor?.(ctx.actionId);
+  return typeof recorded === 'string' ? recorded : undefined;
 }
 
 export class ReadBackReconciler {
@@ -34,7 +33,7 @@ export class ReadBackReconciler {
   }
 
   readonly reconcile: Reconciler = async (ctx) => {
-    const captured = capturedOf(ctx, this.options);
+    const captured = capturedOf(ctx);
     const vars: TemplateVars = {
       args: ctx.args,
       actionId: ctx.actionId,

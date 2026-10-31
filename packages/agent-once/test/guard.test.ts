@@ -82,6 +82,18 @@ describe('Guard.run', () => {
     ]);
   });
 
+  test('a failed outcome repeats the captured value so a later reconciler can read it', async () => {
+    const { ledger, guard } = setup();
+    const result = expectStatus(await guard.run(guardedCall({ captured: 'ORD-1001' }), scripted(TRANSPORT).execute), 'executed');
+    expect(ledger.last().detail).toEqual({
+      captured: 'ORD-1001',
+      failure_kind: 'transport_error',
+      error: TRANSPORT.error,
+      result: null,
+      idempotency_key: result.actionId ?? '',
+    });
+  });
+
   test('storeArgs false keeps args out of the ledger', async () => {
     const { ledger, guard } = setup({ storeArgs: false });
     await guard.run(guardedCall(), scripted(OK).execute);
@@ -195,6 +207,30 @@ describe('Guard.run', () => {
     expect(ledger.states()).toEqual(['intended', 'sent', 'failed', 'reconciled', 'intended', 'sent', 'confirmed']);
     expect(ledger.appended[3]?.detail).toEqual({ outcome: 'not_happened', resolved_by: 'reconciler', result: null, result_truncated: false });
     expect(ledger.last().occurrence).toBe(1);
+  });
+
+  test('reconciler not_happened with retryByAgent records it and hands the retry back without dispatch', async () => {
+    const { clock, ledger, guard } = setup();
+    const tool = scripted(TRANSPORT, OK);
+    const first = expectStatus(await guard.run(guardedCall(), tool.execute), 'executed');
+    clock.advance(10_000);
+    const reconciler = async () => ({ outcome: 'not_happened', retryByAgent: true }) as const;
+    const second = await guard.run(guardedCall({ reconciler }), tool.execute);
+    expect(second).toEqual({ status: 'retry_by_agent', actionId: first.actionId });
+    expect(tool.calls).toHaveLength(1);
+    expect(ledger.states()).toEqual(['intended', 'sent', 'failed', 'reconciled']);
+    const third = expectStatus(await guard.run(guardedCall({ reconciler }), tool.execute), 'executed');
+    expect(third.outcome).toEqual(OK);
+    expect(ledger.last().occurrence).toBe(1);
+  });
+
+  test('a retryByAgent not_happened inside the settle window stays in doubt', async () => {
+    const { clock, guard } = setup();
+    const tool = scripted(TRANSPORT, OK);
+    await guard.run(guardedCall(), tool.execute);
+    clock.advance(9_999);
+    const reconciler = async () => ({ outcome: 'not_happened', retryByAgent: true }) as const;
+    expect((await guard.run(guardedCall({ reconciler }), tool.execute)).status).toBe('in_doubt');
   });
 
   test('a reconciler that throws is treated as unknown', async () => {

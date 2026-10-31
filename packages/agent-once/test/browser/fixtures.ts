@@ -12,7 +12,10 @@ export type FixtureName =
   | 'click-error-page'
   | 'products-snapshot'
   | 'navigate-orders'
-  | 'orders-snapshot';
+  | 'orders-snapshot'
+  | 'done-snapshot'
+  | 'form-snapshot'
+  | 'type-submit';
 
 function read(profile: FixtureProfile, name: string): unknown {
   return JSON.parse(readFileSync(new URL(`../fixtures/browser/${profile}-${name}.json`, import.meta.url), 'utf8'));

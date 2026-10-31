@@ -66,6 +66,7 @@ interface Resolution {
   outcome: 'happened' | 'not_happened';
   by: 'reconciler' | 'human' | 'webhook';
   result?: JsonValue;
+  retryByAgent?: true;
 }
 
 const INHERITED_KEY_REASONS: ReadonlySet<string> = new Set(['failed_after_window', 'not_dispatched']);
@@ -245,6 +246,8 @@ export class Guard {
           throw new ActionInDoubtError(result.doubt, true);
         case 'ledger_unavailable':
           throw new GuardedCallFailedError(result.error);
+        case 'retry_by_agent':
+          throw new GuardedCallFailedError(`agent-once: the earlier ${meta.tool} attempt (action ${result.actionId}) did not happen; check the current state and call again`);
       }
     };
   }
@@ -261,6 +264,11 @@ export class Guard {
     let verifiedSeq: number | undefined;
     let pending: Resolution | undefined;
     for (;;) {
+      if (pending?.retryByAgent === true) {
+        const handed = this.handBack(pending);
+        pending = undefined;
+        if (handed !== undefined) return handed;
+      }
       let claim: Claim;
       let resolved: LedgerEvent | undefined;
       try {
@@ -335,6 +343,19 @@ export class Guard {
     return { kind: 'execute', intended, reason: decision.reason };
   }
 
+  private handBack(resolution: Resolution): GuardResult | undefined {
+    let recorded: LedgerEvent | undefined;
+    try {
+      recorded = this.store.transact((tx) => this.applyResolution(tx, resolution));
+    } catch (error) {
+      if (error instanceof LedgerUnavailableError) return unavailable(error);
+      throw error;
+    }
+    if (recorded === undefined) return undefined;
+    this.emitState(recorded);
+    return { status: 'retry_by_agent', actionId: recorded.actionId };
+  }
+
   private applyResolution(tx: LedgerTx, resolution: Resolution): LedgerEvent | undefined {
     if (tx.latest(resolution.event.intentHash)?.seq !== resolution.event.seq) return undefined;
     const stored = resolution.result === undefined ? { result: null, result_truncated: false } : storedResultDetail(resolution.result, this.maxResultBytes);
@@ -386,6 +407,7 @@ export class Guard {
       case 'error_result': {
         const { result, result_error: resultError } = storedResultDetail(outcome.result, this.maxResultBytes);
         return {
+          ...capturedDetail(call),
           failure_kind: 'error_result',
           error: ERROR_RESULT_MESSAGE,
           result: result ?? null,
@@ -395,7 +417,7 @@ export class Guard {
       }
       case 'transport_error':
       case 'not_dispatched':
-        return { failure_kind: outcome.kind, error: outcome.error, result: null, idempotency_key: idempotencyKey };
+        return { ...capturedDetail(call), failure_kind: outcome.kind, error: outcome.error, result: null, idempotency_key: idempotencyKey };
     }
   }
 

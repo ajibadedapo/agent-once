@@ -106,12 +106,6 @@ describe('ReadBackReconciler', () => {
     expect(upstream.calls).toEqual([]);
   });
 
-  test('the captured value on the event wins over the fallback', async () => {
-    const reconciler = new ReadBackReconciler(ORDERS_RULE, ordersUpstream(), { origin: originOf('playwright'), capturedFor: () => 'AO-11111' });
-    expect(await reconciler.reconcile(reconcileContext({}, { captured: 'AO-48213' }))).toEqual({ outcome: 'happened' });
-    expect(await reconciler.reconcile(reconcileContext({}))).toEqual({ outcome: 'not_happened' });
-  });
-
   test('substituted values are matched literally in patterns', async () => {
     const rule: ReadBackRule = { steps: [{ tool: 'browser_snapshot', args: {} }], happened: '{{captured}} placed' };
     const upstream = new FakeUpstream({ browser_snapshot: fixture('playwright', 'orders-snapshot') });

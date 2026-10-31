@@ -1,0 +1,8 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "## Latest page snapshot\nuid=7_0 RootWebArea \"Card details\" url=\"http://127.0.0.1:62888/account/details\"\n  uid=7_1 heading \"Card details\" level=\"1\"\n  uid=7_2 form\n    uid=7_3 \"Card number \"\n    uid=7_4 textbox \"Card number\"\n    uid=7_5 button \"Pay 42.00 GBP\"\n"
+    }
+  ]
+}

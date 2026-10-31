@@ -1,0 +1,8 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "## Latest page snapshot\nuid=2_0 RootWebArea \"Order placed\" url=\"http://127.0.0.1:62888/done?\"\n  uid=2_1 heading \"Thank you for your order\" level=\"1\"\n  uid=2_2 \"Order number AO-48213 confirmed.\"\n"
+    }
+  ]
+}

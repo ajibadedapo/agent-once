@@ -3,7 +3,7 @@ import type { JsonValue } from '../canonical/jcs.js';
 import type { ToolClass } from '../ledger/types.js';
 import { STATUS_META_KEY } from './meta.js';
 
-export type GuardStatus = 'executed' | 'replayed' | 'in_doubt' | 'blocked';
+export type GuardStatus = 'executed' | 'replayed' | 'in_doubt' | 'blocked' | 'retry_by_agent';
 
 export interface ReplayInfo {
   actionId: string;
@@ -58,6 +58,17 @@ export function upstreamExitedResult(tool: string, actionId: string | undefined,
     `agent-once: the MCP server exited ${code} while this ${tool} call (action ${actionId}) was in flight, so it may or may not have taken effect. Do not retry it until its outcome is known.`,
     statusMeta('in_doubt', actionId, toolClass),
   );
+}
+
+export function retryByAgentResult(tool: string, actionId: string): CallToolResult {
+  return {
+    content: [
+      textItem(
+        `agent-once: the earlier ${tool} attempt (action ${actionId}) did not happen, so this call was not run against a page that may have changed. The page has been loaded again: take a fresh snapshot and repeat the action.`,
+      ),
+    ],
+    _meta: statusMeta('retry_by_agent', actionId),
+  };
 }
 
 export function callFailedResult(tool: string, actionId: string | undefined, error: string): CallToolResult {

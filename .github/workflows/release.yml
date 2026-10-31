@@ -33,17 +33,10 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2
         with:
           python-version: "3.12"
-      - name: Check the tag matches both package versions
+      - name: Check the tag matches every package version
         env:
           TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          npm_version="$(node -p "require('./packages/agent-once/package.json').version")"
-          python_version="$(uv run --project python python -c 'import tomllib; print(tomllib.load(open("python/pyproject.toml", "rb"))["project"]["version"])')"
-          if [ "$TAG" != "v$npm_version" ] || [ "$TAG" != "v$python_version" ]; then
-            echo "::error::tag $TAG does not match agent-once $npm_version and once-guard $python_version"
-            exit 1
-          fi
+        run: node scripts/check-release-version.mjs "$TAG"
       - run: npm ci --no-audit --no-fund
       - run: npm run build
       - run: npm test --workspace agent-once

@@ -144,7 +144,15 @@ describe('renderResults', () => {
     expect(estimate).toContain('- openai is not estimated here.');
     expect(estimate).toContain('- output tokens per model turn: assumed 500 (the tool call, its arguments and any text around it), as in the cost estimate above; not measured');
     expect(estimate).not.toMatch(/output tokens per model call/);
-    expect(markdown.split('\n')[2]).toContain('cost estimate');
+    expect(markdown.split('\n')[2]).toBe(
+      'Generated 2026-10-31T21:15:42.678Z. Every measured number in this file comes from this run, made with the commands below on the machine listed under Guard overhead. The cost estimate under Not run is not a measurement: it uses a dated price table (Test price table cached 2026-10-06) and the token-usage assumptions listed with it.',
+    );
+  });
+
+  test('without a cost estimate the opening says the measured numbers come from this run and names no price table', () => {
+    expect(renderResults(input()).split('\n')[2]).toBe(
+      'Generated 2026-10-31T21:15:42.678Z. Every measured number in this file comes from this run, made with the commands below on the machine listed under Guard overhead. The token-usage assumptions under Not run are assumptions, not measurements.',
+    );
   });
 
   test('real-model runs get their own section and stay out of the scripted tables and estimates', () => {

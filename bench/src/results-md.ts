@@ -415,11 +415,18 @@ function failuresSection(input: ResultsInput): string[] {
   ];
 }
 
+function openingLine(input: ResultsInput): string {
+  const measured = `Generated ${input.generatedAt}. Every measured number in this file comes from this run, made with the commands below on the machine listed under Guard overhead.`;
+  const estimate = input.costEstimate;
+  if (estimate === undefined) return `${measured} The token-usage assumptions under Not run are assumptions, not measurements.`;
+  return `${measured} The cost estimate under Not run is not a measurement: it uses a dated price table (${estimate.priceSource}) and the token-usage assumptions listed with it.`;
+}
+
 export function renderResults(input: ResultsInput): string {
   return [
     '# agent-once benchmark results',
     '',
-    `Generated ${input.generatedAt}. Every result in this file was measured by the commands below on the machine listed under Guard overhead. Nothing here is taken from another source. The only figures that are not measurements are the token-usage assumptions and the cost estimate under Not run, and each is marked as an assumption or an estimate.`,
+    openingLine(input),
     '',
     `Reproduce with one command from the repository root: \`${input.command}\``,
     '',

@@ -1,6 +1,6 @@
 # agent-once benchmark results
 
-Generated 2026-10-31T23:00:54.451Z. Every result in this file was measured by the commands below on the machine listed under Guard overhead. Nothing here is taken from another source. The only figures that are not measurements are the token-usage assumptions and the cost estimate under Not run, and each is marked as an assumption or an estimate.
+Generated 2026-10-31T23:25:48.505Z. Every measured number in this file comes from this run, made with the commands below on the machine listed under Guard overhead. The cost estimate under Not run is not a measurement: it uses a dated price table (Anthropic's model pricing table as cached on 2026-10-06; re-verify before running) and the token-usage assumptions listed with it.
 
 Reproduce with one command from the repository root: `npm ci && npm run build && npx playwright install chromium && npm run bench && npm run bench:browser`
 

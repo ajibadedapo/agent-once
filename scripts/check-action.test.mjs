@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { parse } from 'yaml';
@@ -95,5 +97,61 @@ test('every third-party action in the repository is pinned to a full commit SHA'
       if (reference.startsWith('./')) continue;
       assert.match(reference, /^[\w.-]+\/[\w./-]+@[0-9a-f]{40}$/, `${file} uses ${reference} without a full SHA pin`);
     }
+  }
+});
+
+function versionTree(versions) {
+  const root = mkdtempSync(join(tmpdir(), 'agent-once-release-'));
+  mkdirSync(join(root, 'packages/agent-once'), { recursive: true });
+  mkdirSync(join(root, 'python/src/agent_once'), { recursive: true });
+  writeFileSync(join(root, 'packages/agent-once/package.json'), JSON.stringify({ name: 'agent-once', version: versions.npm }));
+  writeFileSync(join(root, 'python/pyproject.toml'), `[project]\nname = "once-guard"\nversion = "${versions.pyproject}"\n\n[tool.other]\nversion = "9.9.9"\n`);
+  writeFileSync(join(root, 'python/src/agent_once/__init__.py'), `from .guard import Guard\n\n__version__ = "${versions.init}"\n`);
+  return root;
+}
+
+function checkVersions(tag, root) {
+  return spawnSync(process.execPath, [fileURLToPath(new URL('./check-release-version.mjs', import.meta.url)), tag, root], { encoding: 'utf8' });
+}
+
+test('the release version check compares the tag with package.json, pyproject.toml and __version__', () => {
+  const release = parse(readFileSync(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8'));
+  const check = release.jobs.build.steps.find((step) => step.name === 'Check the tag matches every package version');
+  assert.ok(check, 'the build job must check the tag against every package version');
+  assert.equal(check.run, 'node scripts/check-release-version.mjs "$TAG"');
+  assert.equal(check.env.TAG, '${{ github.ref_name }}');
+  const cases = [
+    [{ npm: '1.2.3', pyproject: '1.2.3', init: '1.2.3' }, 0, ''],
+    [{ npm: '1.2.4', pyproject: '1.2.3', init: '1.2.3' }, 1, 'packages/agent-once/package.json has 1.2.4'],
+    [{ npm: '1.2.3', pyproject: '1.2.4', init: '1.2.3' }, 1, 'python/pyproject.toml has 1.2.4'],
+    [{ npm: '1.2.3', pyproject: '1.2.3', init: '1.2.4' }, 1, 'python/src/agent_once/__init__.py has 1.2.4'],
+  ];
+  for (const [versions, status, message] of cases) {
+    const root = versionTree(versions);
+    try {
+      const result = checkVersions('v1.2.3', root);
+      assert.equal(result.status, status, `${JSON.stringify(versions)}: ${result.stdout}${result.stderr}`);
+      if (message !== '') assert.match(result.stdout, new RegExp(`::error::tag v1\\.2\\.3 does not match: .*${message.replace(/[.]/g, '\\.')}`));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test('the release version check passes on this checkout for its own version', () => {
+  const manifest = JSON.parse(readFileSync(new URL('../packages/agent-once/package.json', import.meta.url), 'utf8'));
+  const result = checkVersions(`v${manifest.version}`, ROOT);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+test('the npm package ships no source maps that point at unshipped sources', () => {
+  const packed = spawnSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts', '--workspace', 'agent-once'], { cwd: ROOT, encoding: 'utf8' });
+  assert.equal(packed.status, 0, packed.stderr);
+  const files = JSON.parse(packed.stdout)[0].files.map((file) => file.path);
+  assert.ok(files.includes('dist/index.js') && files.includes('dist/index.d.ts'), `unexpected package contents: ${files.join(', ')}`);
+  assert.deepEqual(files.filter((file) => file.endsWith('.map')), []);
+  assert.deepEqual(files.filter((file) => file.startsWith('src/')), []);
+  for (const file of files.filter((path) => /\.(?:js|d\.ts)$/.test(path))) {
+    assert.doesNotMatch(readFileSync(join(ROOT, 'packages/agent-once', file), 'utf8'), /sourceMappingURL/, `${file} points at a source map`);
   }
 });

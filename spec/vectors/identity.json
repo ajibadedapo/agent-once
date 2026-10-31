@@ -17,7 +17,8 @@
     },
     "intent_hash": "5cfd75d36d4feb18193c49529d6b4b466e815fa76847bffb79378657f3d31b1d",
     "occurrence": 0,
-    "action_id": "ao_d8d90ae0110e53cc478fb375"
+    "intended_at_ms": 1761912345678,
+    "action_id": "ao_60d38ab1e972b053eff9a0e2"
   },
   {
     "name": "key_order_and_top_level_volatile_keys_do_not_change_intent_occurrence_3",
@@ -39,7 +40,8 @@
     },
     "intent_hash": "5cfd75d36d4feb18193c49529d6b4b466e815fa76847bffb79378657f3d31b1d",
     "occurrence": 3,
-    "action_id": "ao_b45ca7cc51c496f2aa8295af"
+    "intended_at_ms": 1761912346695,
+    "action_id": "ao_e1d35c57bcd715bfd287ed43"
   },
   {
     "name": "volatile_keys_removed_at_any_depth",
@@ -99,7 +101,8 @@
     },
     "intent_hash": "b1e51cee7938a8003670a1ce727d4aef0c2846be2efe8a473b2f635d1168f700",
     "occurrence": 0,
-    "action_id": "ao_531af37f3d660bf78546a1a1"
+    "intended_at_ms": 1761912347712,
+    "action_id": "ao_93605bfa29cf1573e6299a09"
   },
   {
     "name": "volatile_key_match_is_case_sensitive",
@@ -118,7 +121,8 @@
     },
     "intent_hash": "677f81d0eb3983926ba331adf7aa2025ba1c7d333c8ec37b25ec5c63e16bc96e",
     "occurrence": 0,
-    "action_id": "ao_2d7f2573553759f72dbc3458"
+    "intended_at_ms": 1761912348729,
+    "action_id": "ao_19626314ebcc34545f62faac"
   },
   {
     "name": "include_rule_keeps_only_listed_top_level_keys",
@@ -144,7 +148,8 @@
     },
     "intent_hash": "dce7e490d5056b60ea8189c36afeeac3eaf3d4ab7f860389cba6a803ff673240",
     "occurrence": 0,
-    "action_id": "ao_367f9534de09ef8faf1ff3cd"
+    "intended_at_ms": 1761912349746,
+    "action_id": "ao_16b7315752b788e4c6eb24b5"
   },
   {
     "name": "exclude_rule_drops_listed_top_level_keys_only",
@@ -174,7 +179,8 @@
     },
     "intent_hash": "fc3cd435729db2923c808bb126895a7ced03f08c1f5b4aa4157b2fd8f9bad1a2",
     "occurrence": 0,
-    "action_id": "ao_653989a6e906ca78893cd74c"
+    "intended_at_ms": 1761912350763,
+    "action_id": "ao_10ca174359f15cfe640448d8"
   },
   {
     "name": "explicit_intent_key_ignores_args",
@@ -191,7 +197,8 @@
     },
     "intent_hash": "dfcef89bea5e2ac6b1c3c7bea7f9de7863e9db70c62bd3455f4171a3e87a8c5d",
     "occurrence": 0,
-    "action_id": "ao_a9e68ed43ecdd4e3aeb795b5"
+    "intended_at_ms": 1761912351780,
+    "action_id": "ao_0301e12c5d8373771937896b"
   },
   {
     "name": "explicit_intent_key_same_key_different_args_occurrence_3",
@@ -208,10 +215,29 @@
     },
     "intent_hash": "dfcef89bea5e2ac6b1c3c7bea7f9de7863e9db70c62bd3455f4171a3e87a8c5d",
     "occurrence": 3,
-    "action_id": "ao_316ae5ae0519641bc100d136"
+    "intended_at_ms": 1761912352797,
+    "action_id": "ao_043419c686768b361ec5dfea"
   },
   {
-    "name": "browser_page_url_drops_query_and_fragment_and_element_refs",
+    "name": "explicit_intent_key_after_prune_restarts_occurrence_0_with_a_new_action_id",
+    "session_key": "claude-code:/work/shop",
+    "tool": "place_order",
+    "args": {
+      "sku": "A-100",
+      "qty": 5
+    },
+    "intent_key": "cart-42-checkout",
+    "projected": {
+      "sku": "A-100",
+      "qty": 5
+    },
+    "intent_hash": "dfcef89bea5e2ac6b1c3c7bea7f9de7863e9db70c62bd3455f4171a3e87a8c5d",
+    "occurrence": 0,
+    "intended_at_ms": 1761998749999,
+    "action_id": "ao_a469c92ded3fda572e51cf94"
+  },
+  {
+    "name": "browser_drops_query_fragment_element_description_and_refs",
     "session_key": "playwright:/work/shop",
     "tool": "browser_click",
     "args": {
@@ -224,13 +250,13 @@
       "label": "Place order"
     },
     "projected": {
-      "element": "Place order button",
       "page_url": "https://shop.example.com/checkout/review",
       "label": "Place order"
     },
-    "intent_hash": "de802e9d46ed87bff4c1a9fcf7fa491a674bf1c17cd088c2e4bab37ed81f2592",
+    "intent_hash": "fe717f60982143a4093955fe83847468e5203d19d79bc3bfbb18512a33ce18b1",
     "occurrence": 0,
-    "action_id": "ao_a572e5de3ca683da77bc9788"
+    "intended_at_ms": 1761912353814,
+    "action_id": "ao_eb8b4624e29bdee29063f189"
   },
   {
     "name": "browser_uid_args_with_explicit_port_and_default_port_removed",
@@ -252,7 +278,8 @@
     },
     "intent_hash": "1df9bc0536713935fa5cea868ecc3b0a18e9a1720ad2d7df74362bbe23e9cd7a",
     "occurrence": 1,
-    "action_id": "ao_5c4799f7b47cae15cc9f6d61"
+    "intended_at_ms": 1761912354831,
+    "action_id": "ao_a895612c2d50b443272e470b"
   },
   {
     "name": "browser_non_default_port_kept_and_page_args_overridden",
@@ -277,7 +304,25 @@
     },
     "intent_hash": "c56f1a0f77225db6750f22d957e5e8d31011af2b7c6eab7b2cdb1f54c648fee1",
     "occurrence": 0,
-    "action_id": "ao_865239934590d4966b502b37"
+    "intended_at_ms": 1761912355848,
+    "action_id": "ao_fe133dbbe5b31644445d2951"
+  },
+  {
+    "name": "element_is_kept_outside_the_browser_profile",
+    "session_key": "claude-code:/work/shop",
+    "tool": "publish_post",
+    "args": {
+      "element": "hero banner",
+      "post_id": "p-7"
+    },
+    "projected": {
+      "element": "hero banner",
+      "post_id": "p-7"
+    },
+    "intent_hash": "ee65c7bf099a2d72a53aa18e72996c449a2a421689ca4db834180c25a8c8186e",
+    "occurrence": 0,
+    "intended_at_ms": 1761912358899,
+    "action_id": "ao_60f35009d9bf6c67bcedf2d2"
   },
   {
     "name": "empty_args",
@@ -287,7 +332,8 @@
     "projected": {},
     "intent_hash": "5cf4724abf9486ee4742df6b897afdada268464e3753ac3bf606b8271cdf8e28",
     "occurrence": 0,
-    "action_id": "ao_600a969d26ee253e39f0ecd6"
+    "intended_at_ms": 1761912356865,
+    "action_id": "ao_fad4eec851ce96efee0402d9"
   },
   {
     "name": "non_ascii_string_values",
@@ -303,6 +349,7 @@
     },
     "intent_hash": "79ee1e7758ef9a8ca1c64a5482d5852c18d04e9d33246981f8df4d171d827bb1",
     "occurrence": 2,
-    "action_id": "ao_ce53b2b11aa5d8bf40700f87"
+    "intended_at_ms": 1761912357882,
+    "action_id": "ao_03ef838d38f01506ada090e4"
   }
 ]

@@ -29,6 +29,7 @@ DEFAULT_VOLATILE_KEYS = frozenset(
 
 BROWSER_VOLATILE_KEYS = frozenset(
     {
+        "element",
         "target",
         "ref",
         "uid",
@@ -47,6 +48,10 @@ SIMPLE_PATH = re.compile(r"(/[A-Za-z0-9_~-]+(\.[A-Za-z0-9]+)?)*/?")
 
 SESSION = "claude-code:/work/shop"
 
+BASE_MS = 1_761_912_345_678
+
+DAY_MS = 86_400_000
+
 CASES: list[dict[str, Any]] = [
     {
         "name": "plain_args_occurrence_0",
@@ -54,6 +59,7 @@ CASES: list[dict[str, Any]] = [
         "tool": "place_order",
         "args": {"sku": "A-100", "qty": 2, "gift": False, "note": None},
         "occurrence": 0,
+        "intended_at_ms": BASE_MS,
     },
     {
         "name": "key_order_and_top_level_volatile_keys_do_not_change_intent_occurrence_3",
@@ -68,6 +74,7 @@ CASES: list[dict[str, Any]] = [
             "request_id": "req-7",
         },
         "occurrence": 3,
+        "intended_at_ms": BASE_MS + 1017,
     },
     {
         "name": "volatile_keys_removed_at_any_depth",
@@ -89,6 +96,7 @@ CASES: list[dict[str, Any]] = [
             "requestId": "r-3",
         },
         "occurrence": 0,
+        "intended_at_ms": BASE_MS + 2034,
     },
     {
         "name": "volatile_key_match_is_case_sensitive",
@@ -96,6 +104,7 @@ CASES: list[dict[str, Any]] = [
         "tool": "send_email",
         "args": {"Timestamp": "kept", "TS": 1, "to": "a@example.com", "ts": 2},
         "occurrence": 0,
+        "intended_at_ms": BASE_MS + 3051,
     },
     {
         "name": "include_rule_keeps_only_listed_top_level_keys",
@@ -110,6 +119,7 @@ CASES: list[dict[str, Any]] = [
         },
         "identity_rule": {"include": ["slot", "venue", "missing_key"]},
         "occurrence": 0,
+        "intended_at_ms": BASE_MS + 4068,
     },
     {
         "name": "exclude_rule_drops_listed_top_level_keys_only",
@@ -124,6 +134,7 @@ CASES: list[dict[str, Any]] = [
         },
         "identity_rule": {"exclude": ["draft_id", "body"]},
         "occurrence": 0,
+        "intended_at_ms": BASE_MS + 5085,
     },
     {
         "name": "explicit_intent_key_ignores_args",
@@ -132,6 +143,7 @@ CASES: list[dict[str, Any]] = [
         "args": {"sku": "A-100", "qty": 5},
         "intent_key": "cart-42-checkout",
         "occurrence": 0,
+        "intended_at_ms": BASE_MS + 6102,
     },
     {
         "name": "explicit_intent_key_same_key_different_args_occurrence_3",
@@ -140,9 +152,19 @@ CASES: list[dict[str, Any]] = [
         "args": {"sku": "B-200", "qty": 1},
         "intent_key": "cart-42-checkout",
         "occurrence": 3,
+        "intended_at_ms": BASE_MS + 7119,
     },
     {
-        "name": "browser_page_url_drops_query_and_fragment_and_element_refs",
+        "name": "explicit_intent_key_after_prune_restarts_occurrence_0_with_a_new_action_id",
+        "session_key": SESSION,
+        "tool": "place_order",
+        "args": {"sku": "A-100", "qty": 5},
+        "intent_key": "cart-42-checkout",
+        "occurrence": 0,
+        "intended_at_ms": BASE_MS + DAY_MS + 4_321,
+    },
+    {
+        "name": "browser_drops_query_fragment_element_description_and_refs",
         "session_key": "playwright:/work/shop",
         "tool": "browser_click",
         "args": {"element": "Place order button", "ref": "e123", "target": "e123"},
@@ -151,6 +173,7 @@ CASES: list[dict[str, Any]] = [
             "label": "Place order",
         },
         "occurrence": 0,
+        "intended_at_ms": BASE_MS + 8136,
     },
     {
         "name": "browser_uid_args_with_explicit_port_and_default_port_removed",
@@ -162,6 +185,7 @@ CASES: list[dict[str, Any]] = [
             "label": "Pay now",
         },
         "occurrence": 1,
+        "intended_at_ms": BASE_MS + 9153,
     },
     {
         "name": "browser_non_default_port_kept_and_page_args_overridden",
@@ -179,6 +203,15 @@ CASES: list[dict[str, Any]] = [
             "label": "Delivery address",
         },
         "occurrence": 0,
+        "intended_at_ms": BASE_MS + 10170,
+    },
+    {
+        "name": "element_is_kept_outside_the_browser_profile",
+        "session_key": SESSION,
+        "tool": "publish_post",
+        "args": {"element": "hero banner", "post_id": "p-7"},
+        "occurrence": 0,
+        "intended_at_ms": BASE_MS + 13_221,
     },
     {
         "name": "empty_args",
@@ -186,6 +219,7 @@ CASES: list[dict[str, Any]] = [
         "tool": "publish_post",
         "args": {},
         "occurrence": 0,
+        "intended_at_ms": BASE_MS + 11187,
     },
     {
         "name": "non_ascii_string_values",
@@ -193,6 +227,7 @@ CASES: list[dict[str, Any]] = [
         "tool": "send_message",
         "args": {"text": "café ☕ üß", "channel": "general"},
         "occurrence": 2,
+        "intended_at_ms": BASE_MS + 12204,
     },
 ]
 
@@ -268,7 +303,12 @@ def build_vector(case: dict[str, Any]) -> dict[str, Any]:
             intent_key,
         ]
     intent_hash = sha256_hex(canonical(preimage))
-    action_id = "ao_" + sha256_hex(canonical([intent_hash, case["occurrence"]]))[:24]
+    action_id = (
+        "ao_"
+        + sha256_hex(
+            canonical([intent_hash, case["occurrence"], case["intended_at_ms"]])
+        )[:24]
+    )
     vector: dict[str, Any] = {
         "name": case["name"],
         "session_key": case["session_key"],
@@ -281,6 +321,7 @@ def build_vector(case: dict[str, Any]) -> dict[str, Any]:
     vector["projected"] = projected
     vector["intent_hash"] = intent_hash
     vector["occurrence"] = case["occurrence"]
+    vector["intended_at_ms"] = case["intended_at_ms"]
     vector["action_id"] = action_id
     return vector
 

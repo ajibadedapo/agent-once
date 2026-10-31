@@ -11,7 +11,7 @@
   },
   "scripts": {
     "check:style": "node scripts/check-style.mjs && uv run --project python python scripts/check_style.py",
-    "test": "node --test scripts/check-style.test.mjs scripts/spec-vectors.test.mjs && uv run --project python python scripts/check_style.py --self-test && uv run --project python python scripts/gen_identity_vectors.py --check && npm test --workspace agent-once && uv run --project python pytest python/tests",
+    "test": "node --test scripts/check-style.test.mjs scripts/spec-vectors.test.mjs scripts/spec-sql.test.mjs && uv run --project python python scripts/check_style.py --self-test && uv run --project python python scripts/gen_identity_vectors.py --check && npm test --workspace agent-once && uv run --project python pytest python/tests",
     "build": "npm run build --workspace agent-once",
     "typecheck": "npm run typecheck --workspace agent-once"
   },

@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
 const load = (file) => JSON.parse(readFileSync(new URL(`../spec/vectors/${file}`, import.meta.url), 'utf8'));
@@ -62,4 +63,43 @@ test('decision vectors include the window end and expiry boundaries', () => {
   assert.ok(atWindowEnd.every((entry) => entry.expect.kind === 'execute'));
   assert.ok(atExpiry.length >= 1);
   assert.ok(atExpiry.every((entry) => entry.expect.reason === 'expired'));
+});
+
+test('identity action ids hash the intent, occurrence and intended time with non-zero milliseconds', () => {
+  for (const entry of identity) {
+    assert.ok(Number.isSafeInteger(entry.intended_at_ms) && entry.intended_at_ms % 1000 !== 0, entry.name);
+    const preimage = JSON.stringify([entry.intent_hash, entry.occurrence, entry.intended_at_ms]);
+    const digest = createHash('sha256').update(preimage, 'utf8').digest('hex');
+    assert.equal(entry.action_id, `ao_${digest.slice(0, 24)}`, entry.name);
+  }
+});
+
+test('the same intent and occurrence at a different intended time gets a different action id', () => {
+  const restarted = identity.find((entry) => entry.name.includes('after_prune'));
+  assert.ok(restarted);
+  const earlier = identity.filter(
+    (entry) =>
+      entry !== restarted &&
+      entry.intent_hash === restarted.intent_hash &&
+      entry.occurrence === restarted.occurrence,
+  );
+  assert.ok(earlier.length >= 1);
+  for (const entry of earlier) {
+    assert.notEqual(entry.intended_at_ms, restarted.intended_at_ms);
+    assert.notEqual(entry.action_id, restarted.action_id);
+  }
+});
+
+test('browser identity drops the free-text element description', () => {
+  const browserCases = identity.filter((entry) => entry.browser);
+  assert.ok(browserCases.some((entry) => 'element' in entry.args));
+  for (const entry of browserCases) {
+    assert.equal('element' in entry.projected, false, entry.name);
+    assert.equal(entry.projected.label, entry.browser.label, entry.name);
+  }
+  const plain = identity.filter((entry) => !entry.browser && 'element' in entry.args);
+  assert.ok(plain.length >= 1);
+  for (const entry of plain) {
+    assert.equal(entry.projected.element, entry.args.element, entry.name);
+  }
 });

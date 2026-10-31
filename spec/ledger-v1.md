@@ -43,13 +43,13 @@ The canonical text is encoded as UTF-8 before hashing.
 
 `projected_args` is computed from the tool call arguments (a JSON object) in this order:
 
-1. Remove volatile keys at any depth, including inside objects nested in arrays. The match is exact and case-sensitive. The default volatile keys are `timestamp`, `ts`, `nonce`, `request_id`, `requestId`, `idempotency_key`, `idempotencyKey`, `trace_id`, `traceId`, `_meta`. The browser profile adds `target`, `ref`, `uid`, `pageId`, `from_uid`, `to_uid`, `slowly`, `includeSnapshot`.
+1. Remove volatile keys at any depth, including inside objects nested in arrays. The match is exact and case-sensitive. The default volatile keys are `timestamp`, `ts`, `nonce`, `request_id`, `requestId`, `idempotency_key`, `idempotencyKey`, `trace_id`, `traceId`, `_meta`. The browser profile adds `element`, `target`, `ref`, `uid`, `pageId`, `from_uid`, `to_uid`, `slowly`, `includeSnapshot`. `element` is the agent's free-text description of the element, which can change between retries of the same action, so the resolved `label` stands in for it.
 2. Apply the tool's identity rule, if any, to the top-level keys only:
    - `{"include": [k1, k2, ...]}` keeps only the listed keys that are present.
    - `{"exclude": [k1, k2, ...]}` removes the listed keys.
 3. Browser profile only: set `page_url` and `label`, replacing any argument keys with the same names.
    - `page_url` is the origin followed by the path of the current page URL, as defined by the WHATWG URL Standard (`url.origin + url.pathname`). Query, fragment and credentials are dropped, scheme and host are lowercase, a default port (80 for http, 443 for https) is omitted and an empty path is `/`.
-   - `label` is the resolved human-readable label of the element acted on.
+   - `label` is the label of the element acted on, resolved from the latest page snapshot by its `ref` or `uid`. When the snapshot does not resolve it, `label` is the element text.
 
 ### 3.2 Intent hash
 
@@ -65,11 +65,13 @@ intent_hash = hex(SHA-256(JCS(["agent-once/v1/intent", session_key, tool, intent
 
 ### 3.3 Action id
 
-Each attempt to perform an intent is an occurrence, numbered from 0.
+Each attempt to perform an intent is an occurrence, numbered from 0. `intended_at_ms` is the `at_ms` of that occurrence's `intended` event.
 
 ```
-action_id = "ao_" + first 24 hex characters of hex(SHA-256(JCS([intent_hash, occurrence])))
+action_id = "ao_" + first 24 hex characters of hex(SHA-256(JCS([intent_hash, occurrence, intended_at_ms])))
 ```
+
+Including `intended_at_ms` keeps action ids unique even when an occurrence number is reused after pruning (section 4.2).
 
 The action id is what the guard forwards to upstream services as an idempotency key.
 
@@ -107,7 +109,7 @@ Opening rules:
 - A database without a `meta` table is new: apply the schema.
 - A reader MUST refuse to open a ledger whose `schema_version` is greater than the version it knows, with an error that states the version found. It MUST NOT modify such a file.
 - An unreadable, corrupt or unwritable ledger is unavailable. Guarded calls fail closed with an "agent-once ledger unavailable" error and are not dispatched. Calls with policy `pass` are unaffected.
-- After the schema version check passes, opening deletes rows with `expires_at_ms < now`. Once every event of an intent is pruned, the next call for it decides `new` at occurrence 0.
+- After the schema version check passes, opening deletes rows with `expires_at_ms < now`. Once every event of an intent is pruned, the next call for it decides `new` at occurrence 0; its action id differs from the pruned one because its `intended_at_ms` differs. The `events_by_expiry` index serves the prune.
 
 ### 4.3 Events
 
@@ -220,12 +222,14 @@ Number inputs are written so that every JSON parser reads the intended double: v
   "projected": object,
   "intent_hash": string,
   "occurrence": integer,
+  "intended_at_ms": integer,
   "action_id": string
 }
 ```
 
 - `browser.page_url` is the raw page URL; its presence selects the browser profile (browser volatile keys plus the `page_url` and `label` step of section 3.1).
 - `projected` is `projected_args` from section 3.1. It is computed even when `intent_key` is present, although the hash then ignores it.
+- `intended_at_ms` is the `at_ms` of the occurrence's `intended` event. Every case uses a time with non-zero milliseconds.
 - `intent_hash` and `action_id` follow sections 3.2 and 3.3.
 
 The cases use only strings, integers, booleans, null and nested objects or arrays with ASCII keys, so Python's `json.dumps(v, sort_keys=True, separators=(",", ":"), ensure_ascii=False)` equals JCS for them. `scripts/gen_identity_vectors.py` regenerates the file; `--check` fails if the file is out of date.

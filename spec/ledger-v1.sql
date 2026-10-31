@@ -20,4 +20,5 @@ CREATE TABLE events (
 CREATE UNIQUE INDEX events_one_intended ON events(intent_hash, occurrence) WHERE state = 'intended';
 CREATE INDEX events_by_intent ON events(intent_hash, occurrence, seq);
 CREATE INDEX events_by_action ON events(action_id, seq);
+CREATE INDEX events_by_expiry ON events(expires_at_ms);
 INSERT INTO meta (key, value) VALUES ('schema_version', '1');

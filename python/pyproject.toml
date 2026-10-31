@@ -12,6 +12,11 @@ classifiers = [
   "Typing :: Typed",
 ]
 
+[project.urls]
+Homepage = "https://github.com/ajibadedapo/agent-once"
+Repository = "https://github.com/ajibadedapo/agent-once"
+Issues = "https://github.com/ajibadedapo/agent-once/issues"
+
 [project.entry-points.pytest11]
 agent_once = "agent_once.pytest_plugin"
 

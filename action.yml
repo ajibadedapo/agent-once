@@ -33,6 +33,10 @@ inputs:
     description: The agent-once npm version to run with npx, for example latest or 0.1.0. Use local to build and run the agent-once checkout this action was loaded from, which works before any release is published (for example uses ./ in this repository).
     required: false
     default: latest
+  artifact-name:
+    description: Name of the uploaded report artefact and stem of the JSON report file. It must be unique within the workflow run, so set it per job and per matrix entry when the action runs more than once (letters, digits, dots, underscores and hyphens).
+    required: false
+    default: agent-once-chaos
 
 runs:
   using: composite
@@ -58,10 +62,15 @@ runs:
         RUNS: ${{ inputs.runs }}
         FAIL_ON_DUPLICATES: ${{ inputs.fail-on-duplicates }}
         AGENT_ONCE_VERSION: ${{ inputs.agent-once-version }}
+        ARTIFACT_NAME: ${{ inputs.artifact-name }}
         ACTION_PATH: ${{ github.action_path }}
       run: |
         set -euo pipefail
-        args=(chaos run --agent "$AGENT_COMMAND" --guard "$GUARD" --runs "$RUNS" --markdown "$GITHUB_STEP_SUMMARY" --json agent-once-chaos.json)
+        if ! [[ "$ARTIFACT_NAME" =~ ^[A-Za-z0-9._-]+$ ]]; then
+          echo "::error::artifact-name may only contain letters, digits, dots, underscores and hyphens, got $ARTIFACT_NAME"
+          exit 2
+        fi
+        args=(chaos run --agent "$AGENT_COMMAND" --guard "$GUARD" --runs "$RUNS" --markdown "$GITHUB_STEP_SUMMARY" --json "$ARTIFACT_NAME.json")
         if [ "$SCENARIOS" != "all" ]; then args+=(--scenarios "$SCENARIOS"); fi
         if [ "$TARGETS" != "all" ]; then args+=(--targets "$TARGETS"); fi
         case "$FAIL_ON_DUPLICATES" in
@@ -79,6 +88,6 @@ runs:
       if: always()
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
       with:
-        name: agent-once-chaos
-        path: agent-once-chaos.json
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.artifact-name }}.json
         if-no-files-found: warn

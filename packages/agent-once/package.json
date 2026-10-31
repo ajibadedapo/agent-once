@@ -4,6 +4,15 @@
   "description": "Stop your AI agent from charging, booking or sending twice.",
   "license": "Apache-2.0",
   "author": "Hammed Ajibade",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ajibadedapo/agent-once.git",
+    "directory": "packages/agent-once"
+  },
+  "homepage": "https://github.com/ajibadedapo/agent-once",
+  "bugs": {
+    "url": "https://github.com/ajibadedapo/agent-once/issues"
+  },
   "type": "module",
   "engines": {
     "node": ">=22.13"

@@ -53,6 +53,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - run: npm run build
       - run: npm run typecheck
       - run: npm test --workspace agent-once
       - run: node --test scripts/spec-vectors.test.mjs scripts/spec-sql.test.mjs scripts/check-action.test.mjs

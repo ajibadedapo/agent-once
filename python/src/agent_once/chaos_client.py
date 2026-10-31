@@ -15,11 +15,14 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import IO, Any
 
+from . import __version__
+
 LISTENING_PREFIX = "agent-once chaos targets listening on "
 CLI_ENV = "AGENT_ONCE_CLI"
 DEFAULT_STARTUP_TIMEOUT_S = 120.0
 DEFAULT_STOP_TIMEOUT_S = 10.0
 REQUEST_TIMEOUT_S = 30.0
+STDERR_TAIL_CHARS = 2_000
 
 Effect = dict[str, Any]
 FaultPlan = Sequence[Mapping[str, Any]]
@@ -118,7 +121,7 @@ def resolve_cli(env: Mapping[str, str]) -> list[str]:
     npx = shutil.which("npx")
     if npx is None:
         raise ChaosTargetsError(f"npx is not on PATH; install Node.js 22.13+ or set {CLI_ENV}")
-    return [npx, "--yes", "agent-once"]
+    return [npx, "--yes", f"agent-once@{__version__}"]
 
 
 def _read_lines(stream: IO[str], lines: queue.Queue[str]) -> None:
@@ -153,6 +156,7 @@ class ChaosServer:
             target=_read_lines, args=(self._process.stdout, self._lines), daemon=True
         )
         self._reader.start()
+        self._group_gone = False
         try:
             self.url = self._await_url(startup_timeout_s)
         except BaseException:
@@ -165,35 +169,44 @@ class ChaosServer:
         except queue.Empty:
             raise ChaosTargetsError(
                 f"agent-once chaos serve printed nothing within {timeout_s:g} s"
+                + self._stderr_tail()
             ) from None
         if line.startswith(LISTENING_PREFIX):
             return line[len(LISTENING_PREFIX) :].strip()
         if line == "":
-            self._process.wait(timeout=self._stop_timeout_s)
-        self._stderr.seek(0)
-        detail = self._stderr.read().strip()
+            try:
+                self._process.wait(timeout=self._stop_timeout_s)
+            except subprocess.TimeoutExpired:
+                pass
         raise ChaosTargetsError(
             f"agent-once chaos serve did not report a URL (first line {line.strip()!r})"
-            + (f": {detail}" if detail else "")
+            + self._stderr_tail()
         )
 
-    def _terminate(self) -> None:
-        if os.name != "posix":
-            self._process.terminate()
+    def _stderr_tail(self) -> str:
+        self._stderr.seek(0)
+        detail = self._stderr.read().strip()[-STDERR_TAIL_CHARS:]
+        return f": {detail}" if detail else ""
+
+    def _signal_group(self, sig: signal.Signals) -> None:
+        if self._group_gone:
             return
         try:
-            os.killpg(self._process.pid, signal.SIGTERM)
+            os.killpg(self._process.pid, sig)
         except ProcessLookupError:
-            pass
+            self._group_gone = True
+
+    def _terminate(self) -> None:
+        if os.name == "posix":
+            self._signal_group(signal.SIGTERM)
+        else:
+            self._process.terminate()
 
     def _kill(self) -> None:
-        if os.name != "posix":
+        if os.name == "posix":
+            self._signal_group(signal.SIGKILL)
+        else:
             self._process.kill()
-            return
-        try:
-            os.killpg(self._process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
 
     def stop(self) -> None:
         try:

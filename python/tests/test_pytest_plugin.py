@@ -47,6 +47,7 @@ def test_chaos_targets_fixture_records_a_duplicate_from_an_unguarded_double_call
     pytester.makepyfile(
         """
         import json
+        import urllib.error
         import urllib.request
 
         import pytest
@@ -84,21 +85,41 @@ def test_chaos_targets_fixture_records_a_duplicate_from_an_unguarded_double_call
         def test_state_is_reset_between_tests(chaos_targets):
             assert chaos_targets.truth()["checkout"] == []
 
+        def post_ticket(url):
+            request = urllib.request.Request(
+                url + "/api/ticket",
+                data=json.dumps({"title": "Printer jam", "body": "Jammed."}).encode(),
+                headers={"content-type": "application/json"},
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(request) as response:
+                    return response.status
+            except urllib.error.HTTPError as error:
+                error.close()
+                return error.code
+
         @pytest.mark.chaos
         def test_faults_apply(chaos_targets):
             chaos_targets.set_faults(
                 [{"target": "ticket", "nth": 1, "kind": "stale_element", "holdMs": 0}]
             )
+            assert post_ticket(chaos_targets.url) == 409
             with pytest.raises(ValueError, match="unknown target"):
                 chaos_targets.set_faults([{"target": "nowhere", "nth": 1, "kind": "none"}])
             with pytest.raises(AssertionError, match="exactly one ticket effect, found 0$"):
                 chaos_targets.assert_exactly_one("ticket")
             with pytest.raises(ValueError, match="unknown target nowhere"):
                 chaos_targets.assert_exactly_one("nowhere")
+
+        @pytest.mark.chaos
+        def test_reset_clears_faults(chaos_targets):
+            assert post_ticket(chaos_targets.url) == 201
+            chaos_targets.assert_exactly_one("ticket")
         """
     )
     result = pytester.runpytest("-p", "no:cacheprovider", "--strict-markers")
-    result.assert_outcomes(passed=3, failed=1)
+    result.assert_outcomes(passed=4, failed=1)
     result.stdout.fnmatch_lines(
         [
             "E*AssertionError: checkout has 2 effects with the same fields "

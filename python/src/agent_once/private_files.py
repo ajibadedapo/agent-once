@@ -11,7 +11,8 @@ def ensure_private_directory(path: str) -> None:
 
 
 def open_private_file(path: str) -> int:
-    return os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, PRIVATE_FILE_MODE)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0)
+    return os.open(path, flags, PRIVATE_FILE_MODE)
 
 
 def ensure_private_file(path: str) -> None:

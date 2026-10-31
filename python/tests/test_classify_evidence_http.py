@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import os
 import stat
 import sys
 from pathlib import Path
@@ -21,6 +22,8 @@ from agent_once import (
     idempotency_headers,
     matches_any_pattern,
 )
+from agent_once import evidence as evidence_module
+from agent_once import private_files as private_files_module
 
 
 def test_the_default_pattern_lists_are_the_agreed_words() -> None:
@@ -144,6 +147,49 @@ def test_jsonl_evidence_keeps_an_existing_stricter_file_mode(tmp_path: Path) -> 
     path.chmod(0o200)
     JsonlEvidence(str(path)).emit(evidence_event())
     assert stat.S_IMODE(path.stat().st_mode) == 0o200
+
+
+def test_jsonl_evidence_writes_lf_line_endings_only(tmp_path: Path) -> None:
+    path = tmp_path / "events.jsonl"
+    sink = JsonlEvidence(str(path))
+    sink.emit(evidence_event())
+    sink.emit(evidence_event(kind="state", detail={"state": "sent", "occurrence": 0}))
+    written = path.read_bytes()
+    assert written.endswith(b"\n")
+    assert b"\r" not in written
+
+
+def test_jsonl_evidence_asks_for_lf_even_where_text_mode_defaults_to_crlf(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_fdopen = os.fdopen
+
+    def windows_default_fdopen(fd: int, mode: str, **kwargs: Any) -> Any:
+        if kwargs.get("newline") is None:
+            kwargs["newline"] = "\r\n"
+        return real_fdopen(fd, mode, **kwargs)
+
+    monkeypatch.setattr(evidence_module.os, "fdopen", windows_default_fdopen)
+    path = tmp_path / "events.jsonl"
+    JsonlEvidence(str(path)).emit(evidence_event())
+    assert b"\r" not in path.read_bytes()
+
+
+def test_private_files_open_in_binary_mode_where_the_platform_has_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    binary_flag = 1 << 30
+    real_open = os.open
+    seen: list[int] = []
+
+    def recording_open(path: str, flags: int, mode: int = 0o777) -> int:
+        seen.append(flags)
+        return real_open(path, flags & ~binary_flag, mode)
+
+    monkeypatch.setattr(os, "O_BINARY", binary_flag, raising=False)
+    monkeypatch.setattr(private_files_module.os, "open", recording_open)
+    os.close(private_files_module.open_private_file(str(tmp_path / "events.jsonl")))
+    assert seen and all(flags & binary_flag for flags in seen)
 
 
 def test_idempotency_headers_carry_the_key() -> None:

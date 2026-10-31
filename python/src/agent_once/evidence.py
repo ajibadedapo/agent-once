@@ -45,5 +45,7 @@ class JsonlEvidence:
         line = json.dumps(
             event.to_json(), ensure_ascii=False, separators=(",", ":"), allow_nan=False
         )
-        with os.fdopen(open_private_file(self._path), "a", encoding="utf-8") as handle:
+        with os.fdopen(
+            open_private_file(self._path), "a", encoding="utf-8", newline="\n"
+        ) as handle:
             handle.write(line + "\n")

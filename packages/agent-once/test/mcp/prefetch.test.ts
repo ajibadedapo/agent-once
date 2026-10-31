@@ -256,7 +256,10 @@ describe('dispatch failures', () => {
     expect(answer.result?.isError).toBe(true);
     expect(JSON.stringify(answer.result)).toContain('pipe is broken');
     expect(statusOf(answer.result)).toBeUndefined();
-    const [recorded] = store.listInDoubt(START_MS);
-    expect(recorded).toBeUndefined();
+    const actionId = /action (ao_[0-9a-f]+)/.exec(JSON.stringify(answer.result))?.[1] ?? '';
+    const recorded = store.findAction(actionId);
+    expect(recorded?.state).toBe('failed');
+    expect(recorded?.detail.failure_kind).toBe('not_dispatched');
+    expect(store.listInDoubt(START_MS)).toEqual([]);
   });
 });

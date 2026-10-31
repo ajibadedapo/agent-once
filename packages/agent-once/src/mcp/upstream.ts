@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { constants } from 'node:os';
 import { PassThrough, type Readable } from 'node:stream';
+import { getDefaultEnvironment } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { ReadBuffer, serializeMessage } from '@modelcontextprotocol/sdk/shared/stdio.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
@@ -18,6 +19,7 @@ export interface UpstreamOptions {
   stderr?: 'inherit' | 'pipe' | 'ignore';
   clock?: Clock;
   closeGraceMs?: number;
+  maxBufferSize?: number;
 }
 
 const DEFAULT_CLOSE_GRACE_MS = 2000;
@@ -35,7 +37,9 @@ export class UpstreamStdioTransport implements ExitAwareTransport {
   private child: ChildProcess | undefined;
   private started = false;
   private recordedExitCode: number | null = null;
-  private readonly buffer = new ReadBuffer();
+  private readonly buffer: ReadBuffer;
+  private finished = false;
+  private discarding = false;
   private readonly stderrStream: PassThrough | null;
   private readonly clock: Clock;
   private readonly closeGraceMs: number;
@@ -44,6 +48,7 @@ export class UpstreamStdioTransport implements ExitAwareTransport {
 
   constructor(private readonly options: UpstreamOptions) {
     this.stderrStream = options.stderr === 'pipe' ? new PassThrough() : null;
+    this.buffer = new ReadBuffer(options.maxBufferSize === undefined ? undefined : { maxBufferSize: options.maxBufferSize });
     this.clock = options.clock ?? systemClock;
     this.closeGraceMs = options.closeGraceMs ?? DEFAULT_CLOSE_GRACE_MS;
     this.closedPromise = new Promise((resolve) => {
@@ -65,7 +70,7 @@ export class UpstreamStdioTransport implements ExitAwareTransport {
     return new Promise((resolve, reject) => {
       let spawned = false;
       const child = spawn(this.options.command, this.options.args ?? [], {
-        env: this.options.env ?? process.env,
+        env: this.options.env === undefined ? process.env : { ...getDefaultEnvironment(), ...this.options.env },
         cwd: this.options.cwd,
         stdio: ['pipe', 'pipe', this.options.stderr ?? 'inherit'],
         windowsHide: true,
@@ -81,13 +86,11 @@ export class UpstreamStdioTransport implements ExitAwareTransport {
       });
       child.once('exit', (code, signal) => {
         this.recordedExitCode = code ?? signalExitCode(signal);
+        void this.closesWithin(this.closeGraceMs).then((closed) => {
+          if (!closed) this.finish(child, spawned);
+        });
       });
-      child.once('close', () => {
-        this.child = undefined;
-        this.buffer.clear();
-        this.markClosed();
-        if (spawned) this.onclose?.();
-      });
+      child.once('close', () => this.finish(child, spawned));
       child.stdout?.on('data', (chunk: Buffer) => this.receive(chunk));
       child.stdout?.on('error', (error) => this.onerror?.(error));
       child.stdin?.on('error', (error) => this.onerror?.(error));
@@ -98,9 +101,24 @@ export class UpstreamStdioTransport implements ExitAwareTransport {
   send(message: JSONRPCMessage): Promise<void> {
     const stdin = this.child?.stdin;
     if (stdin === undefined || stdin === null || !stdin.writable) return Promise.reject(new Error('Not connected'));
-    return new Promise((resolve) => {
-      if (stdin.write(serializeMessage(message))) resolve();
-      else stdin.once('drain', resolve);
+    return new Promise((resolve, reject) => {
+      if (stdin.write(serializeMessage(message))) {
+        resolve();
+        return;
+      }
+      const settle = (error?: Error): void => {
+        stdin.off('drain', onDrain);
+        stdin.off('close', onClose);
+        stdin.off('error', onError);
+        if (error === undefined) resolve();
+        else reject(error);
+      };
+      const onDrain = (): void => settle();
+      const onClose = (): void => settle(new Error('Not connected'));
+      const onError = (error: Error): void => settle(error);
+      stdin.once('drain', onDrain);
+      stdin.once('close', onClose);
+      stdin.once('error', onError);
     });
   }
 
@@ -115,6 +133,18 @@ export class UpstreamStdioTransport implements ExitAwareTransport {
     await this.closedPromise;
   }
 
+  private finish(child: ChildProcess, spawned: boolean): void {
+    if (this.finished) return;
+    this.finished = true;
+    if (this.child === child) this.child = undefined;
+    child.stdin?.destroy();
+    child.stdout?.destroy();
+    child.stderr?.destroy();
+    this.buffer.clear();
+    this.markClosed();
+    if (spawned) this.onclose?.();
+  }
+
   private closesWithin(ms: number): Promise<boolean> {
     return new Promise((resolve) => {
       const timer = this.clock.setTimer(ms, () => resolve(false));
@@ -126,7 +156,15 @@ export class UpstreamStdioTransport implements ExitAwareTransport {
   }
 
   private receive(chunk: Buffer): void {
-    this.buffer.append(chunk);
+    if (this.discarding) return;
+    try {
+      this.buffer.append(chunk);
+    } catch (error) {
+      this.discarding = true;
+      this.onerror?.(error instanceof Error ? error : new Error(String(error)));
+      this.child?.kill('SIGKILL');
+      return;
+    }
     for (;;) {
       let message: JSONRPCMessage | null;
       try {

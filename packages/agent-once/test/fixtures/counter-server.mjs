@@ -151,6 +151,15 @@ server.registerTool('progress_work', { description: 'Reports progress, then answ
   return text('worked');
 });
 
+server.registerTool('flood', { description: 'Writes an oversized line to stdout, then hangs.' }, async (extra) => {
+  update((state) => {
+    state.count += 1;
+    recordAction(state, extra);
+  });
+  process.stdout.write('x'.repeat(11 * 1024 * 1024));
+  await new Promise(() => {});
+});
+
 server.registerResource('about', 'counter://about', { mimeType: 'text/plain' }, async (uri) => ({
   contents: [{ uri: uri.href, mimeType: 'text/plain', text: 'counter fixture' }],
 }));

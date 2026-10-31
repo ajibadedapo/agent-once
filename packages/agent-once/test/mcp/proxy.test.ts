@@ -217,6 +217,16 @@ describe('guarded tools/call', () => {
     expect(textOf(result)).toContain(inDoubt[0]?.actionId);
   });
 
+  test('an oversized upstream message takes the crash path: the client is answered, the action stays sent and closed resolves', async () => {
+    const { client, store, proxy, logs } = await startProxy(workspace);
+    const result = (await client.callTool({ name: 'flood', arguments: {} })) as CallToolResult;
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('exited');
+    expect(await proxy.closed).toEqual({ upstreamExitCode: 137 });
+    expect(store.listInDoubt(workspace.clock.nowMs()).map((event) => [event.tool, event.state])).toEqual([['flood', 'sent']]);
+    expect(logs.some((line) => line.includes('exceeded maximum size'))).toBe(true);
+  });
+
   test('ledger unavailable makes guarded calls return an error result while read tools still work', async () => {
     const store = workspace.openStore();
     store.close();

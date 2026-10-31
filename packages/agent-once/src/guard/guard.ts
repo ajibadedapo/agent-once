@@ -28,6 +28,7 @@ export const DEFAULT_EXPIRY_MS = 86_400_000;
 export const DEFAULT_SETTLE_WINDOW_MS = 10_000;
 
 const ERROR_RESULT_MESSAGE = 'the tool returned an error result';
+const ABANDONED_MESSAGE = 'the call was abandoned before its outcome was known';
 
 export interface GuardDeps {
   store: LedgerStore;
@@ -44,6 +45,7 @@ export interface GuardDeps {
 }
 
 type ProtectedCall = GuardedCall & { policy: GuardPolicy };
+type RecordableOutcome = Exclude<ToolOutcome, { kind: 'abandoned' }>;
 
 interface Identity {
   hash: string;
@@ -85,6 +87,18 @@ function reportToStderr(error: unknown): void {
 function idempotencyKeyOf(event: LedgerEvent): string {
   const key = event.detail.idempotency_key;
   return typeof key === 'string' ? key : event.actionId;
+}
+
+function failureMessage(outcome: Exclude<ToolOutcome, { kind: 'ok' }>): string {
+  switch (outcome.kind) {
+    case 'error_result':
+      return ERROR_RESULT_MESSAGE;
+    case 'abandoned':
+      return ABANDONED_MESSAGE;
+    case 'transport_error':
+    case 'not_dispatched':
+      return outcome.error;
+  }
 }
 
 function isProtected(call: GuardedCall): call is ProtectedCall {
@@ -214,7 +228,7 @@ export class Guard {
         case 'passed':
           if (result.outcome.kind === 'ok') return result.outcome.result as R;
           if (thrown !== undefined) throw thrown.error;
-          throw new GuardedCallFailedError(result.outcome.kind === 'error_result' ? ERROR_RESULT_MESSAGE : result.outcome.error);
+          throw new GuardedCallFailedError(failureMessage(result.outcome));
         case 'replayed':
           return result.result as R;
         case 'in_doubt':
@@ -331,11 +345,15 @@ export class Guard {
     this.emitState(sent);
     const idempotencyKey = idempotencyKeyOf(intended);
     const outcome = await invoke(execute, { actionId: intended.actionId, idempotencyKey });
+    if (outcome.kind === 'abandoned') {
+      this.emit(sent, 'state', { state: 'abandoned', occurrence: sent.occurrence });
+      return { status: 'executed', actionId: intended.actionId, outcome };
+    }
     const recorded = this.recordOutcome(call, sent, idempotencyKey, outcome);
     return recorded ? { status: 'executed', actionId: intended.actionId, outcome } : { status: 'executed', actionId: intended.actionId, outcome, recorded: false };
   }
 
-  private recordOutcome(call: ProtectedCall, sent: LedgerEvent, idempotencyKey: string, outcome: ToolOutcome): boolean {
+  private recordOutcome(call: ProtectedCall, sent: LedgerEvent, idempotencyKey: string, outcome: RecordableOutcome): boolean {
     try {
       const recorded = this.store.transact((tx) => {
         if (outcome.kind !== 'ok' && tx.latest(sent.intentHash)?.seq !== sent.seq) return undefined;
@@ -351,7 +369,7 @@ export class Guard {
     }
   }
 
-  private outcomeDetail(call: ProtectedCall, idempotencyKey: string, outcome: ToolOutcome): Record<string, JsonValue> {
+  private outcomeDetail(call: ProtectedCall, idempotencyKey: string, outcome: RecordableOutcome): Record<string, JsonValue> {
     switch (outcome.kind) {
       case 'ok': {
         const delivery = call.signal?.aborted === true ? 'cancelled' : 'delivered';

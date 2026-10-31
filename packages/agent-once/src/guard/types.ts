@@ -6,7 +6,8 @@ export type ToolOutcome =
   | { kind: 'ok'; result: JsonValue }
   | { kind: 'error_result'; result: JsonValue }
   | { kind: 'transport_error'; error: string }
-  | { kind: 'not_dispatched'; error: string };
+  | { kind: 'not_dispatched'; error: string }
+  | { kind: 'abandoned' };
 
 export type ReconcileOutcome = { outcome: 'happened'; result?: JsonValue } | { outcome: 'not_happened' } | { outcome: 'unknown'; reason: string };
 

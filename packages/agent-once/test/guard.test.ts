@@ -402,6 +402,21 @@ describe('Guard.run', () => {
   });
 });
 
+describe('Guard abandoned outcome', () => {
+  test('an abandoned dispatch writes nothing after sent, emits evidence and clears the in-flight join', async () => {
+    const { ledger, guard, evidence } = setup();
+    const call = guardedCall();
+    const first = expectStatus(await guard.run(call, async () => ({ kind: 'abandoned' })), 'executed');
+    expect(first.outcome).toEqual({ kind: 'abandoned' });
+    expect(ledger.states()).toEqual(['intended', 'sent']);
+    expect(evidence.ofKind('state').map((event) => event.detail.state)).toEqual(['intended', 'sent', 'abandoned']);
+    const tool = scripted(OK);
+    const retry = expectStatus(await guard.run(call, tool.execute), 'in_doubt');
+    expect(retry.doubt.actionId).toBe(first.actionId);
+    expect(tool.calls).toEqual([]);
+  });
+});
+
 describe('Guard.resolve', () => {
   async function inDoubt(toolClass: 'money' | 'irreversible' | 'standard') {
     const context = setup();

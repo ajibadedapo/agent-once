@@ -1,16 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { Guard } from '../../guard/guard.js';
-import { createHumanResolver } from '../../mcp/doubt/human-resolver.js';
-import type { AgentOnceConfig } from '../../config/schema.js';
-import { browserExtension } from '../../mcp/browser/extension.js';
-import { createProxy, type ProxyExtension, type RunningProxy } from '../../mcp/proxy.js';
-import { readBackExtension } from '../../mcp/read-back-reconciler.js';
-import { findToolRule } from '../../mcp/tool-policy.js';
+import { createGuardedProxy } from '../../mcp/guarded-proxy.js';
+import type { RunningProxy } from '../../mcp/proxy.js';
 import { UpstreamStdioTransport } from '../../mcp/upstream.js';
 import { SESSION_ENV } from '../../mcp/meta.js';
 import { systemClock } from '../../time/clock.js';
-import { CliExit, EXIT_FAILED, EXIT_USAGE, evidenceSink, guardSettings, openLedger, parseCommandArgs, readConfig, type CliIo } from '../io.js';
+import { CliExit, EXIT_FAILED, EXIT_USAGE, evidenceSink, openLedger, parseCommandArgs, readConfig, type CliIo } from '../io.js';
 
 export const MCP_USAGE = 'Usage: agent-once mcp [--config <file>] [--session <key>] -- <command> [args...]';
 
@@ -24,12 +19,6 @@ function splitAtSeparator(args: string[]): { options: string[]; server: string[]
   const separator = args.indexOf('--');
   if (separator === -1) throw new CliExit(EXIT_USAGE, MCP_USAGE);
   return { options: args.slice(0, separator), server: args.slice(separator + 1) };
-}
-
-export function proxyExtensions(config: AgentOnceConfig, command: string[]): ProxyExtension[] {
-  const extensions = [readBackExtension(config)];
-  if (config.browser.enabled !== false) extensions.push(browserExtension(config.browser, { command, toolRule: (tool) => findToolRule(tool, config) }));
-  return extensions;
 }
 
 function closeOnShutdown(proxy: RunningProxy): () => void {
@@ -56,23 +45,18 @@ export async function runMcp(args: string[], io: CliIo): Promise<number> {
   const upstream = new UpstreamStdioTransport({ command, args: commandArgs, env: stringEnv(env), cwd: io.cwd, stderr: 'inherit' });
   let proxy: RunningProxy;
   try {
-    proxy = await createProxy({
+    proxy = await createGuardedProxy({
       client: new StdioServerTransport(),
       upstream,
-      guard: (ctx) =>
-        new Guard({
-          store,
-          clock: systemClock,
-          runInstance,
-          evidence: evidenceSink(config),
-          humanResolver: createHumanResolver(ctx, config, env, { log: (message) => io.stderr(`${message}\n`) }),
-          ...guardSettings(config),
-        }),
       config,
+      store,
       clock: systemClock,
+      runInstance,
+      evidence: evidenceSink(config),
       cwd: io.cwd,
       env,
-      extensions: proxyExtensions(config, server),
+      command: server,
+      log: (message) => io.stderr(`${message}\n`),
     });
   } catch (error) {
     store.close();

@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema, type CallToolResult, type Implementation, type Tool } from '@modelcontextprotocol/sdk/types.js';
-import { proxyExtensions } from '../../src/cli/commands/mcp.js';
+import { proxyExtensions } from '../../src/mcp/guarded-proxy.js';
 import { parseConfig, type AgentOnceConfig } from '../../src/config/schema.js';
 import { Guard } from '../../src/guard/guard.js';
 import { MemoryLedgerStore } from '../../src/ledger/memory-store.js';

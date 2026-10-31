@@ -3,7 +3,6 @@ import { loadConfig } from '../config/load.js';
 import { ConfigError, type AgentOnceConfig } from '../config/schema.js';
 import { JsonlEvidenceSink } from '../evidence/jsonl-sink.js';
 import type { EvidenceSink } from '../evidence/types.js';
-import type { GuardDeps } from '../guard/guard.js';
 import { LedgerUnavailableError } from '../ledger/errors.js';
 import { SqliteLedgerStore } from '../ledger/sqlite-store.js';
 import type { Clock } from '../time/clock.js';
@@ -55,15 +54,6 @@ const NO_EVIDENCE: EvidenceSink = { emit: () => {} };
 
 export function evidenceSink(config: AgentOnceConfig): EvidenceSink {
   return config.evidence.jsonl === null ? NO_EVIDENCE : new JsonlEvidenceSink(config.evidence.jsonl);
-}
-
-export function guardSettings(config: AgentOnceConfig): Pick<GuardDeps, 'retryWindowMs' | 'expiryMs' | 'settleWindowMs' | 'storeArgs'> {
-  return {
-    retryWindowMs: Math.round(config.ledger.retryWindowSeconds * 1000),
-    expiryMs: Math.round(config.ledger.expiryHours * 3_600_000),
-    settleWindowMs: Math.round(config.ledger.settleSeconds * 1000),
-    storeArgs: config.ledger.storeArgs,
-  };
 }
 
 export function parseCommandArgs<T extends ParseArgsOptionsConfig>(args: string[], options: T, usage: string): { values: Record<string, string | boolean | undefined>; positionals: string[] } {

@@ -1,35 +1,25 @@
 import { randomUUID } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
-import { guardSettings } from '../cli/io.js';
-import { proxyExtensions } from '../cli/commands/mcp.js';
 import { loadConfig } from '../config/load.js';
 import type { AgentOnceConfig } from '../config/schema.js';
-import { Guard } from '../guard/guard.js';
 import { SqliteLedgerStore } from '../ledger/sqlite-store.js';
-import { createHumanResolver } from '../mcp/doubt/human-resolver.js';
+import { createGuardedProxy } from '../mcp/guarded-proxy.js';
 import { SESSION_ENV } from '../mcp/meta.js';
-import { createProxy, type RunningProxy } from '../mcp/proxy.js';
+import type { RunningProxy } from '../mcp/proxy.js';
 import { ManualClock, systemClock, type Clock } from '../time/clock.js';
-import { DEFAULT_EXTERNAL_AGENT_TIMEOUT_MS, externalAgentName, startExternalAgent, type ExternalAgentOptions, type ExternalAgentRun } from './agents/external-agent.js';
+import { DEFAULT_EXTERNAL_AGENT_TIMEOUT_MS, externalAgentName } from './agents/external-agent.js';
 import { ScriptedApiAgent, type AgentStats, type ScriptedAgentKind, type Wait } from './agents/scripted-api-agent.js';
 import { checkEffects, flushPendingCommits } from './checker.js';
+import { DispatchTap } from './dispatch-tap.js';
+import { runExternalAgent, targetsMcpCommand } from './external-run.js';
 import { chaosTargetsPreset } from './presets.js';
-import {
-  CHAOS_TASKS,
-  CRASH_RERUN_AFTER_MS,
-  REAL_CLOCK_HOLD_MS,
-  REAL_CLOCK_SETTLE_SECONDS,
-  scenarioSpec,
-  type ChaosTask,
-  type RunnableScenario,
-} from './scenarios.js';
+import { CHAOS_TASKS, CRASH_RERUN_AFTER_MS, REAL_CLOCK_HOLD_MS, REAL_CLOCK_SETTLE_SECONDS, scenarioSpec, type ChaosTask, type RunnableScenario } from './scenarios.js';
 import type { TargetName } from './targets/catalog.js';
 import { startTargets, type RunningTargets } from './targets/server.js';
 import { createTargetsMcpServer } from './targets-mcp/server.js';
@@ -57,10 +47,14 @@ export interface RunRecord {
   effects: number;
   duplicate: boolean;
   missing: boolean;
-  agentCalls: number;
-  blockedOrDoubt: number;
+  agentCalls: number | null;
+  blockedOrDoubt: number | null;
   durationMs: number;
+  agentExitCode?: number | null;
+  agentError?: string;
 }
+
+type Measured = Pick<RunRecord, 'agentCalls' | 'blockedOrDoubt' | 'agentExitCode' | 'agentError'>;
 
 export interface MatrixOptions {
   agents: AgentKind[];
@@ -79,7 +73,6 @@ export const CHAOS_START_MS = 1_761_912_345_678;
 
 const SCRIPTED_KINDS: Readonly<Record<string, ScriptedAgentKind>> = { 'scripted:naive': 'naive', 'scripted:obedient': 'obedient' };
 const REAL_CRASH_RERUN_MARGIN_MS = 1_000;
-const DISPATCH_POLL_MS = 20;
 
 export function defaultCli(): string[] {
   return [process.execPath, fileURLToPath(new URL('../cli/main.js', import.meta.url))];
@@ -101,53 +94,6 @@ interface World {
   log: (message: string) => void;
 }
 
-class DispatchTap implements Transport {
-  onclose?: () => void;
-  onerror?: (error: Error) => void;
-  onmessage?: (message: JSONRPCMessage) => void;
-  readonly dispatched: Promise<void>;
-  private markDispatched: () => void = () => {};
-  private readonly mutatingIds = new Set<string | number>();
-  private swallowed = false;
-
-  constructor(
-    private readonly inner: Transport,
-    private readonly tool: string,
-    private readonly crash: boolean,
-  ) {
-    this.dispatched = new Promise((resolve) => {
-      this.markDispatched = resolve;
-    });
-    inner.onclose = () => this.onclose?.();
-    inner.onerror = (error) => this.onerror?.(error);
-    inner.onmessage = (message) => this.receive(message);
-  }
-
-  start(): Promise<void> {
-    return this.inner.start();
-  }
-
-  send(message: JSONRPCMessage): Promise<void> {
-    if ('method' in message && 'id' in message && message.method === 'tools/call' && message.params?.name === this.tool) this.mutatingIds.add(message.id);
-    return this.inner.send(message);
-  }
-
-  close(): Promise<void> {
-    return this.inner.close();
-  }
-
-  private receive(message: JSONRPCMessage): void {
-    const id = 'method' in message ? undefined : (message as { id?: unknown }).id;
-    const answersMutation = (typeof id === 'string' || typeof id === 'number') && this.mutatingIds.has(id);
-    if (answersMutation && this.crash && !this.swallowed) {
-      this.swallowed = true;
-      this.markDispatched();
-      return;
-    }
-    this.onmessage?.(message);
-  }
-}
-
 function chaosConfig(runDir: string, settleSeconds: number | undefined): AgentOnceConfig {
   const base = loadConfig({ cwd: runDir, env: { AGENT_ONCE_HOME: runDir }, homedir: runDir });
   return {
@@ -156,10 +102,6 @@ function chaosConfig(runDir: string, settleSeconds: number | undefined): AgentOn
     ledger: { ...base.ledger, ...(settleSeconds === undefined ? {} : { settleSeconds }) },
     evidence: { jsonl: null },
   };
-}
-
-function targetsMcpCommand(cli: string[], url: string): string[] {
-  return [...cli, 'chaos', 'targets-mcp', '--url', url];
 }
 
 async function scriptedLife(world: World, kind: ScriptedAgentKind, crash: boolean, stats: AgentStats): Promise<void> {
@@ -179,24 +121,17 @@ async function scriptedLife(world: World, kind: ScriptedAgentKind, crash: boolea
       const openedStore = SqliteLedgerStore.open(config.ledger.path, clock);
       store = openedStore;
       const [agentSide, proxySide] = InMemoryTransport.createLinkedPair();
-      const runInstance = randomUUID();
-      proxy = await createProxy({
+      proxy = await createGuardedProxy({
         client: proxySide,
         upstream: tap,
-        guard: (ctx) =>
-          new Guard({
-            store: openedStore,
-            clock,
-            runInstance,
-            evidence: { emit: () => {} },
-            humanResolver: createHumanResolver(ctx, config, env, { log: world.log }),
-            ...guardSettings(config),
-          }),
         config,
+        store: openedStore,
         clock,
+        runInstance: randomUUID(),
+        evidence: { emit: () => {} },
         cwd: runDir,
         env,
-        extensions: proxyExtensions(config, targetsMcpCommand(defaultCli(), targets.url)),
+        command: targetsMcpCommand(defaultCli(), targets.url),
         log: crash ? () => {} : world.log,
       });
       agentTransport = agentSide;
@@ -221,65 +156,35 @@ async function scriptedLife(world: World, kind: ScriptedAgentKind, crash: boolea
   }
 }
 
-async function runScripted(world: World, kind: ScriptedAgentKind, crash: boolean): Promise<AgentStats> {
+function rerunAfterMs(world: World): number {
+  return world.options.clock === 'real' ? world.holdMs + REAL_CRASH_RERUN_MARGIN_MS : CRASH_RERUN_AFTER_MS;
+}
+
+async function runScripted(world: World, kind: ScriptedAgentKind, crash: boolean): Promise<Measured> {
   const stats: AgentStats = { calls: 0, blockedOrDoubt: 0 };
   await scriptedLife(world, kind, crash, stats);
   if (crash) {
-    await world.wait(world.options.clock === 'real' ? world.holdMs + REAL_CRASH_RERUN_MARGIN_MS : CRASH_RERUN_AFTER_MS);
+    await world.wait(rerunAfterMs(world));
     await scriptedLife(world, kind, false, stats);
   }
-  return stats;
+  return { agentCalls: stats.calls, blockedOrDoubt: stats.blockedOrDoubt };
 }
 
-function externalEnv(world: World, mcp: string[]): ExternalAgentOptions['env'] {
-  return {
-    AGENT_ONCE_CHAOS_URL: world.targets.url,
-    AGENT_ONCE_CHAOS_MCP: JSON.stringify(mcp),
-    AGENT_ONCE_TASK: world.task.prompt,
-    AGENT_ONCE_SESSION: world.session,
-    AGENT_ONCE_HOME: world.runDir,
-  };
-}
-
-async function untilDispatched(targets: RunningTargets, agent: ExternalAgentRun): Promise<void> {
-  let exited = false;
-  void agent.exited.then(
-    () => {
-      exited = true;
-    },
-    () => {
-      exited = true;
-    },
-  );
-  while (!exited && targets.pendingCommits() === 0) await delay(DISPATCH_POLL_MS);
-}
-
-async function externalLife(world: World, command: string[], mcp: string[], crash: boolean): Promise<void> {
-  const agent = startExternalAgent({ command, env: externalEnv(world, mcp), timeoutMs: world.options.agentTimeoutMs ?? DEFAULT_EXTERNAL_AGENT_TIMEOUT_MS });
-  if (crash) {
-    await untilDispatched(world.targets, agent);
-    agent.kill();
-  }
-  const { code, signal, stderr } = await agent.exited;
-  if (!crash && code !== 0) world.log(`agent-once chaos: ${externalAgentName(command)} exited with ${code ?? signal ?? 'unknown status'}${stderr === '' ? '' : `: ${stderr.trim()}`}`);
-}
-
-async function runExternal(world: World, command: string[], crash: boolean): Promise<AgentStats> {
-  const cli = world.options.cli ?? defaultCli();
-  const targetsMcp = targetsMcpCommand(cli, world.targets.url);
-  let mcp = targetsMcp;
-  if (world.options.guard) {
-    const configPath = join(world.runDir, 'agent-once.json');
-    const config = { ...chaosTargetsPreset(), ledger: { path: join(world.runDir, 'ledger.db'), settleSeconds: REAL_CLOCK_SETTLE_SECONDS } };
-    writeFileSync(configPath, JSON.stringify(config));
-    mcp = [...cli, 'mcp', '--config', configPath, '--', ...targetsMcp];
-  }
-  await externalLife(world, command, mcp, crash);
-  if (crash) {
-    await world.wait(world.holdMs + REAL_CRASH_RERUN_MARGIN_MS);
-    await externalLife(world, command, mcp, false);
-  }
-  return { calls: 0, blockedOrDoubt: 0 };
+async function runExternal(world: World, command: string[], crash: boolean): Promise<Measured> {
+  const outcome = await runExternalAgent({
+    command,
+    cli: world.options.cli ?? defaultCli(),
+    targets: world.targets,
+    task: world.task,
+    session: world.session,
+    runDir: world.runDir,
+    guard: world.options.guard,
+    crash,
+    rerunAfterMs: rerunAfterMs(world),
+    timeoutMs: world.options.agentTimeoutMs ?? DEFAULT_EXTERNAL_AGENT_TIMEOUT_MS,
+  });
+  if (outcome.error !== undefined) world.log(`agent-once chaos: ${externalAgentName(command)} ${outcome.error}`);
+  return { agentCalls: null, blockedOrDoubt: null, agentExitCode: outcome.exitCode, ...(outcome.error === undefined ? {} : { agentError: outcome.error }) };
 }
 
 export async function runScenario(options: RunScenarioOptions): Promise<RunRecord> {
@@ -308,7 +213,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunRecor
       log: options.log ?? (() => {}),
     };
     const startedMs = clock.nowMs();
-    const stats =
+    const measured: Measured =
       typeof options.agent === 'string' ? await runScripted(world, scriptedKind as ScriptedAgentKind, spec.crash) : await runExternal(world, options.agent.external, spec.crash);
     const durationMs = clock.nowMs() - startedMs;
     await flushPendingCommits(targets, options.clock, holdMs);
@@ -319,14 +224,17 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunRecor
       agent: agentName(options.agent),
       guard: options.guard,
       ...check,
-      agentCalls: stats.calls,
-      blockedOrDoubt: stats.blockedOrDoubt,
+      ...measured,
       durationMs,
     };
   } finally {
     await targets.close();
     rmSync(runDir, { recursive: true, force: true });
   }
+}
+
+export function runsFor(agent: AgentKind, runs: number): number {
+  return typeof agent === 'string' ? Math.min(runs, 1) : runs;
 }
 
 function guardModes(guard: MatrixOptions['guard']): boolean[] {
@@ -341,7 +249,7 @@ export async function runMatrix(options: MatrixOptions): Promise<RunRecord[]> {
     for (const guard of guardModes(options.guard)) {
       for (const scenario of options.scenarios) {
         for (const target of options.targets) {
-          for (let seed = 1; seed <= options.runs; seed += 1) {
+          for (let seed = 1; seed <= runsFor(agent, options.runs); seed += 1) {
             const record = await runScenario({
               scenario,
               target,

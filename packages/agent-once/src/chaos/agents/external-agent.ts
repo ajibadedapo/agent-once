@@ -25,7 +25,16 @@ function spawnCommand(command: string[], env: Record<string, string>): ChildProc
   const [program, ...args] = command;
   if (program === undefined) throw new Error('an external agent needs a command');
   const stdio: ['ignore', 'ignore', 'pipe'] = ['ignore', 'ignore', 'pipe'];
-  return args.length === 0 ? spawn(program, { env, stdio, shell: true }) : spawn(program, args, { env, stdio });
+  return args.length === 0 ? spawn(program, { env, stdio, shell: true, detached: true }) : spawn(program, args, { env, stdio, detached: true });
+}
+
+function killGroup(child: ChildProcess): void {
+  if (child.pid === undefined) return;
+  try {
+    process.kill(-child.pid, 'SIGKILL');
+  } catch {
+    child.kill('SIGKILL');
+  }
 }
 
 export function externalAgentName(command: string[]): string {
@@ -38,9 +47,7 @@ export function startExternalAgent(options: ExternalAgentOptions): ExternalAgent
   child.stderr?.on('data', (chunk: Buffer) => {
     if (stderr.length < MAX_STDERR_CHARS) stderr += chunk.toString('utf8');
   });
-  const kill = (): void => {
-    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
-  };
+  const kill = (): void => killGroup(child);
   const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null; stderr: string }>((resolve, reject) => {
     const timer = setTimeout(kill, options.timeoutMs);
     child.once('error', (error) => {

@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { Guard } from '../../guard/guard.js';
 import type { ResolveResult } from '../../guard/types.js';
 import { systemClock } from '../../time/clock.js';
-import { CliExit, EXIT_FAILED, EXIT_LEDGER, EXIT_OK, EXIT_USAGE, evidenceSink, guardSettings, openLedger, parseCommandArgs, readConfig, type CliIo } from '../io.js';
+import { guardSettings } from '../../mcp/guarded-proxy.js';
+import { CliExit, EXIT_FAILED, EXIT_LEDGER, EXIT_OK, EXIT_USAGE, evidenceSink, openLedger, parseCommandArgs, readConfig, type CliIo } from '../io.js';
 
 export const RESOLVE_USAGE = 'Usage: agent-once resolve <action_id> --happened|--not-happened [--config <file>]';
 

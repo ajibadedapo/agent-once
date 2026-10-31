@@ -12,15 +12,21 @@ export interface EffectCheck {
 const REAL_FLUSH_POLL_MS = 50;
 const REAL_FLUSH_MARGIN_MS = 1_000;
 
+export class UnscorableRunError extends Error {
+  override readonly name: string = 'UnscorableRunError';
+}
+
 export function checkEffects(truth: Effect[], expected: 1): EffectCheck {
   return { effects: truth.length, duplicate: truth.length > expected, missing: truth.length < expected };
 }
 
 export async function flushPendingCommits(targets: Pick<RunningTargets, 'pendingCommits'>, clock: ManualClock | 'real', maxHoldMs: number): Promise<void> {
-  if (clock !== 'real') {
+  if (clock === 'real') {
+    const deadline = Date.now() + maxHoldMs + REAL_FLUSH_MARGIN_MS;
+    while (targets.pendingCommits() > 0 && Date.now() < deadline) await delay(REAL_FLUSH_POLL_MS);
+  } else {
     clock.advance(maxHoldMs + 1);
-    return;
   }
-  const deadline = Date.now() + maxHoldMs + REAL_FLUSH_MARGIN_MS;
-  while (targets.pendingCommits() > 0 && Date.now() < deadline) await delay(REAL_FLUSH_POLL_MS);
+  const pending = targets.pendingCommits();
+  if (pending > 0) throw new UnscorableRunError(`${pending} commit${pending === 1 ? ' is' : 's are'} still pending after the flush, so the run cannot be scored`);
 }

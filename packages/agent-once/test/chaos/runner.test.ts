@@ -1,12 +1,13 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, test } from 'vitest';
 import { runChaos } from '../../src/cli/commands/chaos.js';
 import type { CliIo } from '../../src/cli/io.js';
 import { renderMarkdown, runMatrix, runScenario, summarize, type AgentKind, type RunRecord, type ScenarioName } from '../../src/chaos/index.js';
 import { TARGET_NAMES, type TargetName } from '../../src/chaos/targets/catalog.js';
+import { loadConfig } from '../../src/config/load.js';
 import { ManualClock } from '../../src/time/clock.js';
 import { START_MS } from './chaos-harness.js';
 
@@ -100,11 +101,11 @@ describe('chaos runner', () => {
     },
   );
 
-  test('runMatrix runs every combination once per run', async () => {
-    const records = await runMatrix({ agents: ['scripted:naive'], scenarios: ['lost_response_after_commit'], targets: ['ticket', 'email'], guard: 'both', runs: 2, ledgerDir: tempDir() });
-    expect(records).toHaveLength(8);
+  test('runMatrix runs every combination once, since scripted agents are deterministic', async () => {
+    const records = await runMatrix({ agents: ['scripted:naive'], scenarios: ['lost_response_after_commit'], targets: ['ticket', 'email'], guard: 'both', runs: 3, ledgerDir: tempDir() });
+    expect(records).toHaveLength(4);
     expect(records.filter((run) => run.guard && run.duplicate)).toHaveLength(0);
-    expect(records.filter((run) => !run.guard && run.duplicate)).toHaveLength(4);
+    expect(records.filter((run) => !run.guard && run.duplicate)).toHaveLength(2);
   });
 
   test('matrix markdown lists duplicate and missing rates with run counts', () => {
@@ -113,18 +114,20 @@ describe('chaos runner', () => {
       record({ guard: false, effects: 1 }),
       record({ guard: true, effects: 1 }),
       record({ guard: true, effects: 1, target: 'ticket' }),
-      record({ agent: 'scripted:obedient', scenario: 'timeout_before_commit', target: 'email', guard: true, effects: 0, missing: true }),
+      record({ agent: 'scripted:obedient', scenario: 'timeout_before_commit', target: 'email', guard: true, effects: 0, missing: true, agentCalls: 5 }),
+      record({ agent: 'node agent.mjs', guard: true, agentCalls: null, blockedOrDoubt: null }),
     ];
     const markdown = renderMarkdown(summarize(records));
-    expect(markdown).toContain('| Agent | Guard | Scenario | Runs | Duplicate rate | Missing rate |');
-    expect(markdown).toContain('| scripted:naive | off | slow_commit | 2 | 50.0% (1/2) | 0.0% (0/2) |');
-    expect(markdown).toContain('| scripted:naive | on | slow_commit | 2 | 0.0% (0/2) | 0.0% (0/2) |');
-    expect(markdown).toContain('| scripted:obedient | on | timeout_before_commit | 1 | 0.0% (0/1) | 100.0% (1/1) |');
+    expect(markdown).toContain('| Agent | Guard | Scenario | Runs | Duplicate rate | Missing rate | Mean agent calls |');
+    expect(markdown).toContain('| scripted:naive | off | slow_commit | 2 | 50.0% (1/2) | 0.0% (0/2) | 2.0 |');
+    expect(markdown).toContain('| scripted:naive | on | slow_commit | 2 | 0.0% (0/2) | 0.0% (0/2) | 2.0 |');
+    expect(markdown).toContain('| scripted:obedient | on | timeout_before_commit | 1 | 0.0% (0/1) | 100.0% (1/1) | 5.0 |');
+    expect(markdown).toContain('| node agent.mjs | on | slow_commit | 1 | 0.0% (0/1) | 0.0% (0/1) | not measured |');
     const failures = markdown.slice(markdown.indexOf('## Failures'));
     expect(failures).toContain('missing: scripted:obedient, guard on, timeout_before_commit, email, 0 effects');
     expect(failures).not.toContain('guard off');
     const clean = renderMarkdown(summarize([record({ guard: true })]));
-    expect(clean.slice(clean.indexOf('## Failures'))).toContain('None: no guarded run duplicated or lost an effect.');
+    expect(clean.slice(clean.indexOf('## Failures'))).toContain('None: no guarded run duplicated or lost an effect, and every agent exited cleanly.');
   });
 
   test('an external agent command receives the documented env vars', async () => {
@@ -132,9 +135,17 @@ describe('chaos runner', () => {
     const cli = ['agent-once-cli'];
     for (const guard of [true, false]) {
       const file = join(out, `env-${String(guard)}.json`);
-      const run = await runScenario({ scenario: 'stale_element', target: 'booking', agent: { external: [process.execPath, ENV_AGENT, file] }, guard, clock: 'real', ledgerDir: tempDir(), seed: 7, cli });
+      const ledgerDir = tempDir();
+      const run = await runScenario({ scenario: 'stale_element', target: 'booking', agent: { external: [process.execPath, ENV_AGENT, file] }, guard, clock: 'real', ledgerDir, seed: 7, cli });
       expect(run).toMatchObject({ agent: `${process.execPath} ${ENV_AGENT} ${file}`, guard, effects: 0, missing: true });
-      const seen = JSON.parse(readFileSync(file, 'utf8')) as { env: Record<string, string>; config: { ledger: { settleSeconds: number; path: string }; tools: Record<string, unknown> } | null };
+      const seen = JSON.parse(readFileSync(file, 'utf8')) as {
+        env: Record<string, string>;
+        config: { ledger: { settleSeconds: number; path: string }; tools: Record<string, unknown> } | null;
+        configPath: string | null;
+        configCopy: string | null;
+      };
+      expect(run).toMatchObject({ agentCalls: null, blockedOrDoubt: null, agentExitCode: 0 });
+      expect(run.agentError).toBeUndefined();
       const url = seen.env.AGENT_ONCE_CHAOS_URL ?? '';
       expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
       expect(seen.env.AGENT_ONCE_TASK).toContain('book_slot');
@@ -146,12 +157,26 @@ describe('chaos runner', () => {
         expect(mcp.slice(4)).toEqual(['--', ...targetsMcp]);
         expect(seen.config?.ledger.settleSeconds).toBe(3);
         expect(Object.keys(seen.config?.tools ?? {})).toEqual(['place_order', 'book_slot', 'send_email', 'create_ticket']);
+        const loaded = loadConfig({ path: seen.configCopy ?? '', cwd: out, env: {}, homedir: out });
+        const runDir = dirname(seen.configPath ?? '');
+        expect(dirname(runDir)).toBe(ledgerDir);
+        expect(loaded.ledger.path).toBe(join(runDir, 'ledger.db'));
+        expect(loaded.ledger.settleSeconds).toBe(3);
+        expect(loaded.tools.place_order?.readBack?.steps).toEqual([{ tool: 'list_orders', args: {} }]);
       } else {
         expect(mcp).toEqual(targetsMcp);
         expect(seen.config).toBeNull();
       }
     }
   });
+});
+
+test('a failing external agent carries its exit code and shows under Failures', async () => {
+  const agent = { external: [process.execPath, '-e', "process.stderr.write('boom'); process.exit(3)"] };
+  const run = await runScenario({ scenario: 'stale_element', target: 'ticket', agent, guard: false, clock: 'real', ledgerDir: tempDir(), seed: 1, cli: ['agent-once-cli'] });
+  expect(run).toMatchObject({ agentExitCode: 3, agentError: 'exited with code 3: boom', agentCalls: null, blockedOrDoubt: null });
+  const failures = renderMarkdown(summarize([run]));
+  expect(failures.slice(failures.indexOf('## Failures'))).toContain(`- agent error: ${run.agent}, guard off, stale_element, ticket: exited with code 3: boom`);
 });
 
 describe('agent-once chaos run', () => {

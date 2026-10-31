@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { checkEffects, flushPendingCommits } from '../../src/chaos/checker.js';
 import type { Effect } from '../../src/chaos/targets/store.js';
+import { ManualClock } from '../../src/time/clock.js';
 import { START_MS, postJson, targetsOnManualClock } from './chaos-harness.js';
 
 function effect(id: string): Effect {
@@ -25,5 +26,10 @@ describe('checker', () => {
     expect(targets.pendingCommits()).toBe(0);
     expect(targets.truth().ticket).toHaveLength(1);
     expect(clock.nowMs()).toBeGreaterThan(START_MS + 5_000);
+  });
+
+  test('a run whose commits are still pending after the flush cannot be scored', async () => {
+    const stuck = { pendingCommits: () => 1 };
+    await expect(flushPendingCommits(stuck, new ManualClock(START_MS), 5_000)).rejects.toThrow('1 commit is still pending after the flush, so the run cannot be scored');
   });
 });

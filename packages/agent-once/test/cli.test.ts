@@ -34,7 +34,10 @@ beforeAll(() => {
   if (build.status !== 0) throw new Error(`build failed: ${build.stdout}${build.stderr}`);
 }, 120_000);
 
+const children: ChildProcess[] = [];
+
 afterEach(() => {
+  for (const child of children.splice(0)) if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
@@ -180,6 +183,7 @@ const LISTENING = /^agent-once chaos targets listening on (http:\/\/127\.0\.0\.1
 
 async function serveTargets(): Promise<{ child: ChildProcess; firstLine: string; url: string }> {
   const child = spawn(process.execPath, [CLI, 'chaos', 'serve', '--port', '0'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  children.push(child);
   const firstLine = await new Promise<string>((resolve, reject) => {
     let buffered = '';
     child.once('exit', (code) => reject(new Error(`chaos serve exited with ${String(code)} before listening`)));
@@ -265,6 +269,12 @@ describe('agent-once chaos', () => {
     expect(result.stderr).toContain('agent-once chaos serve');
     expect(runCli(['chaos', 'targets-mcp'], home).status).toBe(2);
     expect(runCli(['chaos', 'serve', '--port', 'eighty'], home).status).toBe(2);
+    const zeroTimeout = runCli(['chaos', 'targets-mcp', '--url', 'http://127.0.0.1:9', '--timeout-ms', '0'], home);
+    expect(zeroTimeout.status).toBe(2);
+    expect(zeroTimeout.stderr).toContain('--timeout-ms expects a positive whole number up to 2147483647, got 0');
+    const hugeTimeout = runCli(['chaos', 'targets-mcp', '--url', 'http://127.0.0.1:9', '--timeout-ms', '2147483648'], home);
+    expect(hugeTimeout.status).toBe(2);
+    expect(hugeTimeout.stderr).toContain('--timeout-ms expects a positive whole number up to 2147483647, got 2147483648');
   });
 });
 

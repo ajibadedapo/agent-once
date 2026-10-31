@@ -85,7 +85,11 @@ export class TargetsEngine {
   }
 
   private commitLater(mutation: Mutation, dueMs: number): void {
-    const timer = this.clock.setTimer(Math.max(0, dueMs - this.clock.nowMs()), () => {
+    if (dueMs <= this.clock.nowMs()) {
+      this.commit(mutation);
+      return;
+    }
+    const timer = this.clock.setTimer(dueMs - this.clock.nowMs(), () => {
       this.pending.delete(timer);
       this.commit(mutation);
     });

@@ -1,6 +1,6 @@
 import { DEFAULT_BROWSER_CONFIG, type AgentOnceConfig, type BrowserReadBackRule, type ToolRule } from '../config/schema.js';
 import { STALE_FORM_ERROR } from './targets/api-routes.js';
-import { TARGET_NAMES, type TargetName } from './targets/catalog.js';
+import { TARGET_NAMES, TARGETS, type TargetName } from './targets/catalog.js';
 
 const API_READ_BACK: Readonly<Record<string, string>> = {
   place_order: 'list_orders',
@@ -28,7 +28,7 @@ function browserReadBack(target: TargetName): BrowserReadBackRule {
       { tool: 'browser_snapshot', args: {} },
     ],
     happened: '\\b{{captured}}\\b',
-    notHappened: 'History',
+    notHappened: TARGETS[target].historyTitle,
   };
 }
 

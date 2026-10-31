@@ -142,19 +142,26 @@ describe('targets MCP server', () => {
     const pending = call(client, 'create_ticket', { title: 'Printer jam', body: 'Jammed.' }, 'ao_waiting');
     const request = await arrival;
     expect(request.headers['idempotency-key']).toBe('ao_waiting');
+    let settled = false;
+    void pending.then(() => {
+      settled = true;
+    });
     clock.advance(2_499);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(settled).toBe(false);
     clock.advance(1);
     expect(await pending).toMatchObject({ isError: true, content: [{ type: 'text', text: 'request failed: timed out after 2500 ms' }] });
   });
 
-  test('an unreachable target is an error result', async () => {
+  test('a target that drops every connection is an error result', async () => {
     const clock = new ManualClock(START_MS);
-    const closed = createServer();
-    await new Promise<void>((resolve) => closed.listen(0, '127.0.0.1', resolve));
-    const port = (closed.address() as AddressInfo).port;
-    await new Promise<void>((resolve) => closed.close(() => resolve()));
-    const client = await connect(`http://127.0.0.1:${port}`, clock);
-    expect(resultText(await call(client, 'list_orders', {}))).toMatch(/^request failed: connect ECONNREFUSED/);
+    const dropping: HttpServer = createServer();
+    dropping.on('connection', (socket) => socket.destroy());
+    await new Promise<void>((resolve) => dropping.listen(0, '127.0.0.1', resolve));
+    closers.push(() => new Promise<void>((resolve) => dropping.close(() => resolve())));
+    const client = await connect(`http://127.0.0.1:${(dropping.address() as AddressInfo).port}`, clock);
+    expect(await call(client, 'list_orders', {})).toMatchObject({ isError: true });
+    expect(resultText(await call(client, 'list_orders', {}))).toMatch(/^request failed: (socket hang up|read ECONNRESET)$/);
   });
 });
 
@@ -194,6 +201,38 @@ describe('chaos targets preset', () => {
       expect(await reconciler.reconcile({ tool, args, actionId: 'ao_other', event: sentEvent(tool, { idempotency_key: `${key}9` }) })).toEqual({
         outcome: 'not_happened',
       });
+    }
+  });
+
+  test('the API read-back does not take a longer key or a key containing it for the looked-up key', async () => {
+    const { clock, targets } = await targetsOnManualClock();
+    const client = await connect(targets.url, clock);
+    const upstream = { callUpstreamTool: (name: string, args: Record<string, unknown>) => call(client, name, args) };
+    const rule = findToolRule('create_ticket', presetConfig())?.readBack;
+    if (rule === undefined) throw new Error('no read-back for create_ticket');
+    const key = 'ao_0123456789abcdef01234567';
+    const ticket = { title: 'Printer jam', body: 'Jammed.' };
+    await call(client, 'create_ticket', ticket, `${key}9`);
+    await call(client, 'create_ticket', ticket, `x${key}9`);
+    const reconciler = new ReadBackReconciler(rule, upstream);
+    const context = { tool: 'create_ticket', args: ticket, actionId: 'ao_other', event: sentEvent('create_ticket', { idempotency_key: key }) };
+    expect(await reconciler.reconcile(context)).toEqual({ outcome: 'not_happened' });
+  });
+
+  test('a browser read-back that lands on an error page at the history URL is unknown', async () => {
+    const { targets } = await targetsOnManualClock();
+    const config = presetConfig();
+    for (const target of ['checkout', 'booking', 'email', 'ticket']) {
+      const rule = browserReadBackRule(config.browser, `${targets.url}/${target}`);
+      if (rule === undefined) throw new Error(`no browser read-back for ${target}`);
+      const browser = {
+        callUpstreamTool: async (name: string, args: Record<string, unknown>): Promise<CallToolResult> => ({
+          content: [{ type: 'text', text: name === 'browser_navigate' ? `Navigated to ${String(args.url)}\nPage URL: ${String(args.url)}` : '404 Not Found' }],
+        }),
+      };
+      const reconciler = new ReadBackReconciler(rule, browser, { origin: targets.url });
+      const context = { tool: 'browser_click', args: {}, actionId: 'ao_click', event: sentEvent('browser_click', { captured: 'F-1' }) };
+      expect(await reconciler.reconcile(context)).toEqual({ outcome: 'unknown', reason: 'the read-back matched neither pattern' });
     }
   });
 

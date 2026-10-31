@@ -27,6 +27,14 @@ describe('chaos faults', () => {
     expect(targets.pendingCommits()).toBe(0);
   });
 
+  test('a slow commit already due commits before the connection drops, on any clock', async () => {
+    const { targets } = await targetsOnManualClock();
+    targets.setFaults([{ target: 'booking', nth: 1, kind: 'slow_commit', holdMs: 0 }]);
+    await expect(postJson(`${targets.url}/api/booking`, { slot: 'Mon 10:00', name: 'Sam' })).rejects.toThrow(/socket hang up|ECONNRESET/);
+    expect(targets.truth().booking.map((effect) => [effect.id, effect.atMs])).toEqual([['BK-1', START_MS]]);
+    expect(targets.pendingCommits()).toBe(0);
+  });
+
   test('a slow commit honours the idempotency key at commit time', async () => {
     const { clock, targets } = await targetsOnManualClock({ honourIdempotencyKey: true });
     targets.setFaults([{ target: 'ticket', nth: 1, kind: 'slow_commit', holdMs: 3_000 }]);
